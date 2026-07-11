@@ -1,5 +1,6 @@
 # Implementação de teste na esteira CI em 24/06/2026.
 # validação de build, testes unitários, cobertura de código, SBOM e análise de vulnerabilidades com Trivy.
+# validação entrega!
 name: CI
 on:
   push:
