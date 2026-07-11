@@ -1,0 +1,69 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Automação da INFRA via Terraform Cloud (HCP Terraform)
+#
+# O que este workflow faz:
+#   - Conecta no Terraform Cloud (usando o secret TF_API_TOKEN do GitHub).
+#   - Roda `terraform plan` (e, no apply manual, `terraform apply`).
+#   - A EXECUÇÃO de verdade acontece DENTRO do Terraform Cloud, onde ficam
+#     guardadas as credenciais da AWS (AWS_ACCESS_KEY_ID / SECRET / SESSION_TOKEN).
+#
+# IMPORTANTE: este workflow só funciona DEPOIS de você ter:
+#   1) Descomentado o bloco `cloud {}` em infra/backend.tf.
+#   2) Criado a organização + workspace no Terraform Cloud.
+#   3) Cadastrado as credenciais AWS do Academy nas Variables do workspace.
+#   4) Criado o secret TF_API_TOKEN no GitHub.
+# Tudo isso está explicado, passo a passo, em GUIA-TERRAFORM-CLOUD-AWS-ACADEMY.md
+#
+# Ele roda apenas no "Run workflow" manual (workflow_dispatch) para não quebrar
+# o CI antes de você terminar a configuração. Depois de configurado, você pode
+# habilitar o gatilho automático por push (veja o bloco comentado abaixo).
+# ─────────────────────────────────────────────────────────────────────────────
+name: Infra (Terraform Cloud)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "O que rodar"
+        required: true
+        default: "plan"
+        type: choice
+        options:
+          - plan
+          - apply
+  # Depois de configurado, descomente para rodar plan automaticamente a cada
+  # push que altere a pasta infra/:
+  # push:
+  #   branches: [ main ]
+  #   paths: [ "infra/**" ]
+
+env:
+  # >>> AJUSTE estes dois valores para os seus <<<
+  TF_CLOUD_ORGANIZATION: "SUA_ORGANIZACAO_AQUI"
+  TF_WORKSPACE: "oficina-backend-infra"
+
+jobs:
+  terraform:
+    name: Terraform
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar o Terraform (com token do Terraform Cloud)
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform plan
+        run: terraform plan -input=false
+
+      - name: terraform apply
+        if: ${{ github.event.inputs.action == 'apply' }}
+        run: terraform apply -input=false -auto-approve

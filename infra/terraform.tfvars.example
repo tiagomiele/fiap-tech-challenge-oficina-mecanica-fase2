@@ -1,0 +1,38 @@
+# Copie este arquivo para terraform.tfvars e ajuste os valores
+# cp terraform.tfvars.example terraform.tfvars
+#
+# Este é o exemplo GENÉRICO (conta AWS normal). Para AWS Academy / Learner Lab,
+# use o terraform.tfvars.academy.example (reutiliza a LabRole e fixa us-west-2).
+
+aws_region  = "us-east-1"
+environment = "dev"
+
+# Em conta AWS normal, deixe vazio ("") para o Terraform CRIAR as IAM roles.
+# Em AWS Academy, aponte para a LabRole (veja terraform.tfvars.academy.example).
+lab_role_arn = ""
+
+# ARN do IAM role/usuário que terá acesso admin ao cluster (Access Entry).
+# Vazio = não cria Access Entry. Ex.: "arn:aws:iam::123456789012:role/SeuRole".
+access_entry_role_arn = ""
+
+# State remoto (S3). Use um nome de bucket GLOBALMENTE único.
+state_bucket_name     = "oficina-terraform-state-ALTERAR"
+state_lock_table_name = "oficina-terraform-locks"
+
+# Rede
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# EKS
+cluster_version    = "1.31"
+node_instance_type = "t3.medium"
+node_desired_count = 2
+node_min_count     = 2
+node_max_count     = 5
+
+# RDS
+db_instance_class    = "db.t3.micro"
+db_name              = "oficina"
+db_username          = "oficina"
+db_password          = "ALTERAR_PARA_SENHA_SEGURA"
+db_allocated_storage = 20

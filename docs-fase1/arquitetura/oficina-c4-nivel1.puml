@@ -1,0 +1,25 @@
+@startuml oficina-c4-nivel1
+!include c4inc/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+title Diagrama C4 - Nivel 1 (Contexto de Sistema) - Sistema de Gestao da Oficina Mecanica
+
+Person(cliente, "Cliente", "Dono do veiculo. Consulta o status da OS e aprova/reprova o orcamento (endpoints publicos, sem login).")
+Person(admin, "Perfil 02 - Administrativo", "Funcionario da oficina. Gerencia clientes, veiculos, servicos, pecas, estoque, notas fiscais, financeiro, relatorios e OS.")
+Person(tecnico, "Perfil 03 - Tecnico", "Assistencia tecnica. Diagnostico, montagem do orcamento, execucao do reparo e cancelamento em diagnostico.")
+
+System(oficina, "Sistema de Gestao da Oficina\n(oficina-backend)", "API REST em Java 21 / Spring Boot 3, Clean Architecture (4 aneis). Autenticacao JWT, regras de negocio de OS / orcamento / estoque / financeiro e notificacoes.")
+
+System_Ext(db, "Banco de Dados PostgreSQL", "Persistencia (Amazon RDS em producao). Acesso via Spring Data JPA / Hibernate; schema versionado por Flyway.")
+System_Ext(mail, "Mailtrap (Servidor SMTP)", "Servidor de e-mail (sandbox) para envio das notificacoes de mudanca de status, via Spring Mail.")
+
+Rel(cliente, oficina, "Consulta status / aprova / reprova orcamento", "HTTPS / REST (publico)")
+Rel(admin, oficina, "Administra a oficina e as OS", "HTTPS / REST + JWT")
+Rel(tecnico, oficina, "Diagnostico, orcamento e execucao", "HTTPS / REST + JWT")
+
+Rel(oficina, db, "Le e grava dados", "JDBC / JPA (Hibernate) + Flyway")
+Rel(oficina, mail, "Envia e-mail de notificacao", "SMTP (Spring Mail)")
+Rel_Back(cliente, oficina, "Notifica atualizacao de status da OS", "E-mail")
+
+SHOW_LEGEND()
+@enduml
