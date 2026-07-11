@@ -1,0 +1,92 @@
+spring:
+  application:
+    name: oficina-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/oficina}
+    username: ${DB_USER:oficina}
+    password: ${DB_PASSWORD:oficina}
+    hikari:
+      maximum-pool-size: 10
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+        format_sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+    default-property-inclusion: non_null
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+  health:
+    # Notificação por e-mail é efeito colateral opcional; não deve acoplar a
+    # saúde da aplicação ao servidor SMTP (evita /actuator/health DOWN quando
+    # MAIL_HOST não está configurado, ex.: modo log).
+    mail:
+      enabled: false
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    # Tags ordenadas alfabeticamente — como começam com "01-", "02-", "03-", "04-",
+    # ficam na ordem desejada (Auth, Administrativo, Tecnico, Cliente).
+    tags-sorter: alpha
+    # Operações ordenadas pelo prefixo numérico do @Operation(summary) (ex: "01.01",
+    # "01.02", ...). Função JS é avaliada pelo Swagger UI no navegador.
+    # Sentinel substituído em runtime pelo SwaggerOrderConfig por uma função JS real
+    # (Springdoc serializa qualquer valor como string em JSON, então não aceita função literal aqui).
+    operationsSorter: __OFICINA_OPERATIONS_SORTER__
+
+oficina:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:change-me-in-production-at-least-32-chars-long-please}
+      issuer: oficina-backend
+      access-token-ttl-minutes: 15
+      refresh-token-ttl-days: 7
+    rate-limit:
+      login-per-minute: 10
+      public-per-minute: 30
+  bootstrap:
+    admin:
+      email: ${ADMIN_EMAIL:admin@oficina.local}
+      password: ${ADMIN_PASSWORD:admin123}
+  notificacao:
+    # log (default) escreve no log; smtp envia e-mail real via spring.mail.*
+    tipo: ${NOTIFICACAO_TIPO:log}
+    remetente: ${NOTIFICACAO_REMETENTE:nao-responder@oficina.local}

@@ -1,0 +1,54 @@
+# ─── Exemplo de configuração para AWS Academy (Learner Lab) ───
+# Copie para terraform.tfvars e ajuste:
+#   cp terraform.tfvars.academy.example terraform.tfvars
+#
+# Diferenças em relação a uma conta AWS normal:
+#  - Região fixada em us-west-2 (única liberada no Learner Lab)
+#  - lab_role_arn aponta para a LabRole (o lab bloqueia a criação de IAM roles)
+#  - Tamanhos reduzidos para caber no orçamento do lab
+
+aws_region  = "us-west-2"
+environment = "dev"
+
+# Reutiliza a LabRole do AWS Academy. Substitua ACCOUNT_ID pelo ID da sua conta,
+# que você obtém no seu lab com:
+#   aws iam get-role --role-name LabRole --query 'Role.Arn' --output text
+lab_role_arn = "arn:aws:iam::ACCOUNT_ID:role/LabRole"
+
+# Acesso admin ao cluster.
+# ⚠️ No AWS Academy DEIXE VAZIO. A role "voclabs" (a que você assume na sessão) tem
+# um deny explícito (policy "voc-cancel-cred") em eks:CreateAccessEntry, então o
+# Terraform NÃO consegue criar a Access Entry — o apply falharia com AccessDenied.
+# Em vez disso, o cluster usa bootstrap_cluster_creator_admin_permissions = true
+# (em eks-cluster.tf): o EKS concede admin automaticamente a quem CRIA o cluster
+# (a voclabs usada pelo Terraform Cloud), e o kubectl funciona logo após o apply.
+# Preencha esta variável SÓ em conta AWS normal (ex.: seu usuário/role IAM).
+access_entry_role_arn = ""
+
+# State remoto (S3). No Learner Lab a role voclabs normalmente NÃO tem permissão
+# para s3:CreateBucket / dynamodb:CreateTable. Deixe false e use state local.
+create_state_backend  = false
+state_bucket_name     = "oficina-terraform-state-ALTERAR"
+state_lock_table_name = "oficina-terraform-locks"
+
+# Rede
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-west-2a", "us-west-2b"]
+
+# EKS (tamanho enxuto para o orçamento do lab)
+# us-west-2 não suporta mais 1.29 — use 1.31.
+cluster_version    = "1.31"
+node_instance_type = "t3.medium"
+node_desired_count = 2
+node_min_count     = 1
+node_max_count     = 3
+
+# RDS
+db_instance_class    = "db.t3.micro"
+db_name              = "oficina"
+db_username          = "oficina"
+db_password          = "ALTERAR_PARA_SENHA_SEGURA"
+db_allocated_storage = 20
+# No AWS Academy a LabRole nao pode descobrir a versao do engine dinamicamente.
+# Mantenha uma versao fixa do PostgreSQL aqui (ex.: "16" ou "16.4").
+db_engine_version = "16"

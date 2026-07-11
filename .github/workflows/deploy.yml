@@ -1,0 +1,139 @@
+name: Deploy (reusable)
+
+# Workflow reutilizável de deploy no Kubernetes, parametrizado por ambiente.
+# Chamado pelo cd.yml para STG, pré-produção e produção.
+# O gate manual de produção é aplicado pela protection rule do GitHub Environment
+# informado em `environment` (ex.: production com required reviewers).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "GitHub Environment alvo (staging, pre-prod, production)"
+        required: true
+        type: string
+      namespace:
+        description: "Namespace Kubernetes do ambiente"
+        required: true
+        type: string
+      image_ref:
+        description: "Imagem completa a ser deployada (registry/owner/app:tag)"
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }} (${{ inputs.namespace }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar se o cluster está configurado
+        id: check
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
+        run: |
+          if [ -z "${KUBECONFIG_B64}" ]; then
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Secret KUBECONFIG não configurado para o ambiente '${{ inputs.environment }}' — deploy será pulado. Configure o secret no GitHub Environment para habilitar o deploy automático."
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup kubectl
+        if: steps.check.outputs.present == 'true'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.29.0'
+
+      - name: Configurar acesso ao cluster
+        if: steps.check.outputs.present == 'true'
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${KUBECONFIG_B64}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Renderizar manifestos para o namespace do ambiente
+        if: steps.check.outputs.present == 'true'
+        env:
+          TARGET_NS: ${{ inputs.namespace }}
+          IMAGE_REF: ${{ inputs.image_ref }}
+        run: |
+          set -euo pipefail
+          rm -rf rendered && mkdir -p rendered
+          cp k8s/*.yaml rendered/
+          # O Secret é provisionado por ambiente no passo seguinte (não usa o
+          # secret.yaml versionado, que contém apenas credenciais default).
+          rm -f rendered/secret.yaml
+          # Troca o namespace fixo (oficina) pelo namespace do ambiente
+          sed -i "s|name: oficina$|name: ${TARGET_NS}|" rendered/namespace.yaml
+          sed -i "s|namespace: oficina$|namespace: ${TARGET_NS}|" rendered/*.yaml
+          # Aponta a imagem para a build desta execução
+          sed -i "s|image: oficina-backend:latest|image: ${IMAGE_REF}|" rendered/app-deployment.yaml
+          echo "Namespace alvo: ${TARGET_NS}"
+          grep -h "image:" rendered/app-deployment.yaml
+
+      - name: Provisionar Secret do ambiente
+        if: steps.check.outputs.present == 'true'
+        env:
+          TARGET_NS: ${{ inputs.namespace }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+          APP_JWT_SECRET: ${{ secrets.APP_JWT_SECRET }}
+          APP_ADMIN_PASSWORD: ${{ secrets.APP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Garante o namespace antes de criar o Secret
+          kubectl apply -f rendered/namespace.yaml
+          if [ -n "${APP_DB_PASSWORD}" ] && [ -n "${APP_JWT_SECRET}" ] && [ -n "${APP_ADMIN_PASSWORD}" ]; then
+            echo "Criando Secret a partir dos secrets do GitHub Environment '${ENVIRONMENT}'"
+            kubectl create secret generic oficina-secrets \
+              --namespace "${TARGET_NS}" \
+              --from-literal=DB_PASSWORD="${APP_DB_PASSWORD}" \
+              --from-literal=JWT_SECRET="${APP_JWT_SECRET}" \
+              --from-literal=ADMIN_PASSWORD="${APP_ADMIN_PASSWORD}" \
+              --dry-run=client -o yaml | kubectl apply -f -
+          elif [ "${ENVIRONMENT}" = "production" ]; then
+            echo "::error::Secrets de produção não configurados. Defina APP_DB_PASSWORD, APP_JWT_SECRET e APP_ADMIN_PASSWORD no GitHub Environment 'production'."
+            exit 1
+          else
+            echo "::warning::Secrets do ambiente não definidos — usando credenciais default de k8s/secret.yaml (apenas para STG/homologação; NÃO usar em produção)."
+            sed "s|namespace: oficina$|namespace: ${TARGET_NS}|" k8s/secret.yaml | kubectl apply -f -
+          fi
+
+      - name: Aplicar manifestos (namespace, config, banco e aplicação)
+        if: steps.check.outputs.present == 'true'
+        run: kubectl apply -f rendered/
+
+      - name: Aguardar rollout do banco de dados
+        if: steps.check.outputs.present == 'true'
+        run: kubectl rollout status deployment/oficina-db -n "${{ inputs.namespace }}" --timeout=120s
+
+      - name: Aguardar rollout da aplicação
+        if: steps.check.outputs.present == 'true'
+        run: kubectl rollout status deployment/oficina-app -n "${{ inputs.namespace }}" --timeout=180s
+
+      - name: Smoke test (/actuator/health)
+        if: steps.check.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          kubectl -n "${{ inputs.namespace }}" run smoke-${{ github.run_id }} \
+            --image=curlimages/curl:8.10.1 --restart=Never --rm -i --quiet \
+            --command -- curl -fsS http://oficina-app/actuator/health
+          echo "Smoke test OK"
+
+      - name: Resumo do deploy
+        if: steps.check.outputs.present == 'true'
+        run: |
+          {
+            echo "### Deploy em '${{ inputs.environment }}' :rocket:"
+            echo "- Namespace: \`${{ inputs.namespace }}\`"
+            echo "- Imagem: \`${{ inputs.image_ref }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          kubectl get pods,svc,hpa -n "${{ inputs.namespace }}"

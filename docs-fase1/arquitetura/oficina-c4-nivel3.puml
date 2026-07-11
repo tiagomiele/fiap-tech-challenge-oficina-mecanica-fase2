@@ -1,0 +1,68 @@
+@startuml oficina-c4-nivel3
+!include c4inc/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+LAYOUT_TOP_DOWN()
+title Diagrama C4 - Nivel 3 (Component) - Container "API REST (oficina-backend)" em Clean Architecture
+
+Person(atores, "Clientes e Funcionarios", "Cliente (publico), Perfil 02 (Admin) e Perfil 03 (Tecnico).")
+ContainerDb_Ext(db, "PostgreSQL / RDS", "Banco de dados")
+System_Ext(mail, "Mailtrap (SMTP)", "Servidor de e-mail")
+
+Container_Boundary(api, "API REST - oficina-backend (Java 21 / Spring Boot 3)") {
+
+    Boundary(anel_adapter_in, "Anel 4 - Adapter (Entrada / Web)") {
+        Component(ctrlAuth, "AuthController", "Spring Web REST", "Login e emissao de JWT.")
+        Component(ctrlPub, "ClienteOficinaController", "Spring Web REST (publico)", "Consulta status, aprova/reprova orcamento e confirma pagamento.")
+        Component(ctrlAdm, "AdministrativoOficinaController", "Spring Web REST (JWT)", "Perfil 02: cadastros, estoque, NF, financeiro, relatorios, OS e alteracao de status.")
+        Component(ctrlTec, "TecnicoOficinaController", "Spring Web REST (JWT)", "Perfil 03: diagnostico, orcamento, execucao e cancelar diagnostico.")
+        Component(cross, "JwtAuthenticationFilter + GlobalExceptionHandler", "Spring Security / @ControllerAdvice", "Valida o token JWT e traduz excecoes de dominio em respostas HTTP.")
+    }
+
+    Boundary(anel_usecase, "Anel 3 - Use Case (Aplicacao)") {
+        Component(svcOs, "OrdemServicoServiceImpl", "@Service @Transactional", "Orquestra o ciclo de vida da OS: abertura, orcamento, aprovacao, execucao, cancelamento, alteracao de status; coordena estoque e notificacao.")
+        Component(svcApoio, "Demais Services", "@Service", "Cliente, Veiculo, Servico, Peca, Estoque, NotaFiscal, Financeiro, Auth/User.")
+        Component(ports, "Ports / Gateways (interfaces)", "Java interfaces", "OrdemServicoRepository, ClienteRepository, EstoqueRepository, NotificacaoGateway, RelatorioGateway, TokenGateway, NumeroOSGenerator, ...")
+    }
+
+    Boundary(anel_domain, "Anel 1/2 - Domain (Nucleo puro, sem Spring/JPA)") {
+        Component(agg, "OrdemServico (Aggregate) + Orcamento + ItemOrcamento", "POJO / regras de negocio", "Maquina de estados, invariantes e regras (cancelarEmDiagnostico, alterarStatus, recalculo de valores).")
+        Component(vo, "Value Objects + Enums", "POJO", "Dinheiro, Placa, Documento, NumeroOS; StatusOrdemServico, StatusOrcamentoItem.")
+    }
+
+    Boundary(anel_adapter_out, "Anel 4 - Adapter (Saida / Implementacoes das Ports)") {
+        Component(persist, "Persistencia JPA", "Spring Data JPA / Hibernate", "Jpa*Repository + entidades + mappers implementam as ports de repositorio.")
+        Component(notif, "Notificacao", "Spring Mail", "LogNotificacaoGateway (default) e SmtpNotificacaoGateway implementam NotificacaoGateway.")
+        Component(secJwt, "JwtTokenService", "JJWT", "Implementa TokenGateway (geracao/validacao de JWT).")
+    }
+}
+
+Rel(atores, ctrlAuth, "Autentica", "HTTPS/REST")
+Rel(atores, ctrlPub, "Usa rotas publicas", "HTTPS/REST")
+Rel(atores, ctrlAdm, "Administra", "HTTPS/REST + JWT")
+Rel(atores, ctrlTec, "Operacao tecnica", "HTTPS/REST + JWT")
+Rel(cross, ctrlAdm, "Protege / valida", "filtro")
+Rel(cross, ctrlTec, "Protege / valida", "filtro")
+
+Rel(ctrlAuth, svcApoio, "usa")
+Rel(ctrlPub, svcOs, "usa")
+Rel(ctrlAdm, svcOs, "usa")
+Rel(ctrlAdm, svcApoio, "usa")
+Rel(ctrlTec, svcOs, "usa")
+
+Rel(svcOs, agg, "aplica regras de negocio")
+Rel(svcApoio, agg, "usa entidades")
+Rel(agg, vo, "composto por")
+Rel(svcOs, ports, "depende de (interfaces)")
+Rel(svcApoio, ports, "depende de (interfaces)")
+
+Rel(persist, ports, "implementa", "DIP")
+Rel(notif, ports, "implementa", "DIP")
+Rel(secJwt, ports, "implementa", "DIP")
+
+Rel(persist, db, "Le/grava", "JDBC/JPA + Flyway")
+Rel(notif, mail, "Envia e-mail", "SMTP")
+Rel(cross, secJwt, "valida token")
+
+SHOW_LEGEND()
+@enduml
