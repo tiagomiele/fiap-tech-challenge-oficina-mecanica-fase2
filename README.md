@@ -1,4 +1,4 @@
-# Oficina Backend — Sistema de Gestão de Oficina Mecânica
+# Oficina Backend — Sistema de Gestão de Oficina Mecânica - Tech Challenge Fase 2
 
 [![CI](https://github.com/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2/actions/workflows/ci.yml/badge.svg)](https://github.com/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2/actions/workflows/ci.yml)
 
@@ -138,7 +138,7 @@ Infrastructure
 
 As dependências apontam para dentro. O domínio não depende de Spring, JPA, Servlet ou infraestrutura.
 
-![img.png](docs-fase2/01-evidencias-fase-2/img.png)
+![103-Desenho-Camadas-Clean-Arch-Projeto.png](docs-fase2/01-evidencias-fase-2/103-Desenho-Camadas-Clean-Arch-Projeto.png)
 
 ### Infraestrutura AWS
 
@@ -153,7 +153,7 @@ A infraestrutura utiliza:
 - GHCR para armazenar a imagem Docker;
 - HPA com 2–5 pods.
 
-![img_1.png](docs-fase2/01-evidencias-fase-2/img_1.png)
+![101-Desenho-Arquitetura-Visão-Geral-Projeto.png](docs-fase2/01-evidencias-fase-2/101-Desenho-Arquitetura-Visão-Geral-Projeto.png)
 
 ## 5. Tecnologias e pré-requisitos
 
