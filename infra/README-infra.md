@@ -166,5 +166,3 @@ precisa existir antes. Fluxo:
 1. `terraform init` + `terraform apply` (state local) → cria o bucket/lock de `bucket.tf`.
 2. Descomente o bloco em `backend.tf` (ajuste `bucket`/`region`).
 3. `terraform init -migrate-state` → move o state local para o S3.
-
-Passo a passo completo em [`../GUIA-DEPLOY-INFRA-TERRAFORM.md`](../docs-fase2/GUIA-DEPLOY-INFRA-TERRAFORM.md).

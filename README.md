@@ -2,788 +2,2120 @@
 
 [![CI](https://github.com/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2/actions/workflows/ci.yml/badge.svg)](https://github.com/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2/actions/workflows/ci.yml)
 
-**Back-end para gestão completa de uma oficina mecânica de médio porte** — Tech Challenge SOAT / FIAP — Java 21 · Spring Boot 3.3 · PostgreSQL 16 · Clean Architecture · DDD
+Back-end para gestão de uma oficina mecânica de médio porte — Tech Challenge SOAT / FIAP — Java 21, Spring Boot 3.3, PoolhreSQL 16, Clean Architecture, DDD, Docker, Kubernetes, GitHub Actions, Terraform e AWS.
+
+Este documento apresenta o projeto e funciona como roteiro reproduzível de validação. Todos os comandos foram escritos para **Windows PowerShell**. A sequência incorpora as causas raiz e correções confirmadas durante a execução real de Maven, Docker Desktop, Docker Compose, Minikube, metrics-server e HPA.
 
 ---
 
 ## Sumário
 
-- [Sobre o Projeto](#sobre-o-projeto)
-- [Objetivos da Fase 2](#objetivos-da-fase-2)
-- [Funcionalidades](#funcionalidades)
-- [Arquitetura — Clean Architecture (4 Anéis)](#arquitetura--clean-architecture-4-anéis)
-- [Arquitetura de Infraestrutura (AWS)](#arquitetura-de-infraestrutura-aws)
-- [Fluxo de Deploy (CI/CD)](#fluxo-de-deploy-cicd)
-- [Diagramas de Arquitetura](#diagramas-de-arquitetura)
-- [Tecnologias](#tecnologias)
-- [Pré-requisitos](#pré-requisitos)
-- [Execução Local (Docker Compose)](#execução-local-docker-compose)
-- [Deploy em Kubernetes](#deploy-em-kubernetes)
-- [Provisionamento da Infraestrutura (Terraform)](#provisionamento-da-infraestrutura-terraform)
-- [Variáveis de Ambiente](#variáveis-de-ambiente)
-- [Documentação e Collection das APIs](#documentação-e-collection-das-apis)
-- [Endpoints Principais](#endpoints-principais)
-- [Fluxo da Ordem de Serviço](#fluxo-da-ordem-de-serviço)
-- [Estrutura do Projeto](#estrutura-do-projeto)
-- [Testes e Cobertura](#testes-e-cobertura)
-- [Validação de Arquitetura (ArchUnit)](#validação-de-arquitetura-archunit)
-- [Vídeo Demonstrativo](#vídeo-demonstrativo)
+- [1. Sobre o projeto](#1-sobre-o-projeto)
+- [2. Objetivos da Fase 2](#2-objetivos-da-fase-2)
+- [3. Funcionalidades](#3-funcionalidades)
+- [4. Arquitetura](#4-arquitetura)
+- [5. Tecnologias e pré-requisitos](#5-tecnologias-e-pré-requisitos)
+- [6. Ordem recomendada da validação](#6-ordem-recomendada-da-validação)
+- [7. Preparar o projeto](#7-preparar-o-projeto)
+- [8. Validar código, testes e arquitetura](#8-validar-código-testes-e-arquitetura)
+- [9. Executar localmente com Docker Compose](#9-executar-localmente-com-docker-compose)
+- [10. Validar o fluxo funcional da API](#10-validar-o-fluxo-funcional-da-api)
+- [11. Executar localmente com Minikube](#11-executar-localmente-com-minikube)
+- [12. Validar escalabilidade com HPA no Minikube](#12-validar-escalabilidade-com-hpa-no-minikube)
+- [13. Publicar a feature e validar o CI](#13-publicar-a-feature-e-validar-o-ci)
+- [14. Validar o CD e a imagem no GHCR](#14-validar-o-cd-e-a-imagem-no-ghcr)
+- [15. Provisionar a AWS com Terraform Cloud](#15-provisionar-a-aws-com-terraform-cloud)
+- [16. Implantar e validar a aplicação no EKS](#16-implantar-e-validar-a-aplicação-no-eks)
+- [17. Validar o HPA no EKS](#17-validar-o-hpa-no-eks)
+- [18. Encerrar os recursos da AWS](#18-encerrar-os-recursos-da-aws)
+- [19. Endpoints principais](#19-endpoints-principais)
+- [20. Variáveis de ambiente](#20-variáveis-de-ambiente)
+- [21. Troubleshooting](#21-troubleshooting)
+- [22. Evidências para a entrega](#22-evidências-para-a-entrega)
+- [23. Documentação adicional](#23-documentação-adicional)
 
 ---
 
-## Sobre o Projeto
+## 1. Sobre o projeto
 
-Sistema que permite uma oficina mecânica controlar o **ciclo de vida completo de uma Ordem de Serviço (OS)**: desde o recebimento do veículo até o pagamento e entrega, passando por diagnóstico, orçamento, aprovação do cliente e execução do reparo.
+O sistema controla o ciclo completo de uma Ordem de Serviço, desde o recebimento do veículo até o pagamento e a entrega. O processo inclui diagnóstico, orçamento, aprovação do cliente, consumo de peças, execução do reparo, movimentações financeiras e notificações.
 
-O projeto aplica **Domain-Driven Design (DDD)** com padrões táticos (agregados, value objects, entidades ricas) e está estruturado em **Clean Architecture** com 4 anéis isolados (domain → usecase → adapter → infrastructure).
+O projeto aplica Domain-Driven Design e Clean Architecture. As regras de negócio permanecem isoladas de banco de dados, framework web e infraestrutura.
 
 ### O que o sistema oferece
 
-- Cadastro e gestão de **clientes** e **veículos**
-- Catálogo de **serviços** e **peças** com controle de preços
-- Controle de **estoque** de peças com rastreabilidade de movimentações
-- Registro de **notas fiscais de fornecedor** com entrada automática no estoque
-- Ciclo completo de **Ordens de Serviço** com múltiplos orçamentos
-- **Conta corrente** da oficina (contas a pagar e contas a receber)
-- **Relatórios** de tempo médio de execução por OS
-- **Consulta pública** de status da OS pelo cliente (sem autenticação)
-- **Notificação** ao cliente nas transições de status (log por default; e-mail real via SMTP configurável)
+- cadastro de clientes e veículos;
+- catálogo de serviços e peças;
+- controle de estoque e movimentações;
+- notas fiscais de fornecedor;
+- ciclo completo de Ordens de Serviço;
+- múltiplos orçamentos por OS;
+- contas a pagar e a receber;
+- relatórios administrativos;
+- consulta pública do status da OS;
+- notificação por log ou SMTP;
+- autenticação JWT e controle de perfis;
+- execução em Docker e Kubernetes;
+- escalabilidade por CPU e memória;
+- infraestrutura AWS criada por Terraform;
+- CI/CD com GitHub Actions e GHCR.
 
 ---
 
-## Objetivos da Fase 2
+## 2. Objetivos da Fase 2
 
-A Fase 2 evolui a aplicação da Fase 1 para garantir **qualidade, resiliência e escalabilidade**, incorporando práticas modernas de infraestrutura e automação:
-
-| Objetivo | Como foi atendido |
+| Objetivo | Implementação |
 |---|---|
-| **Reduzir riscos operacionais com infraestrutura escalável** | Cluster Kubernetes (EKS) com múltiplas réplicas + HPA (auto-scaling 2–5 pods por CPU e memória) |
-| **Automatizar o provisionamento e o deploy** | Terraform (IaC) para provisionar VPC, EKS e RDS + pipeline CI/CD (GitHub Actions) |
-| **Melhorar qualidade e organização do código** | Refatoração para Clean Architecture (4 anéis), Clean Code e 106 testes automatizados |
-| **Suportar grandes volumes em horários de pico** | Escalabilidade dinâmica via HPA + rolling updates sem downtime |
+| Melhorar organização e manutenibilidade | Clean Architecture com quatro anéis e regras validadas por ArchUnit |
+| Automatizar qualidade | GitHub Actions, 120 testes, JaCoCo, SBOM CycloneDX e Trivy |
+| Padronizar execução | Docker, Docker Compose e manifestos Kubernetes |
+| Suportar aumento de carga | HPA com 2–5 pods, CPU alvo de 70% e memória alvo de 80% |
+| Automatizar infraestrutura | Terraform Cloud provisionando VPC, EKS e RDS na AWS |
+| Automatizar entrega | Build e publicação da imagem no GHCR, promoção por ambiente e aprovação de produção |
 
 ---
 
-## Funcionalidades
+## 3. Funcionalidades
 
-### Gestão de Clientes e Veículos
-- Cadastro com validação de **CPF/CNPJ** (dígitos verificadores)
-- Suporte a **placa antiga** (ABC1234) e **Mercosul** (ABC1D23)
-- Vínculo veículo ↔ cliente com PK composta (placa + idCliente)
+### Clientes e veículos
+
+- validação de CPF/CNPJ;
+- placas no formato antigo e Mercosul;
+- vínculo entre veículo e cliente;
+- bloqueio de operações que violem as regras de negócio.
 
 ### Ordens de Serviço
-- **Abertura unificada** — uma única chamada POST cria a OS já com os itens (serviços e/ou peças) no corpo da requisição
-- **Abertura Recebida** — endpoint dedicado que cria a OS apenas com dados básicos (sem serviços, peças ou orçamento), em status `RECEBIDA` (comportamento da Fase 1)
-- **Relatório de OS por status** (Perfil Administrativo) com ordenação por prioridade `EM_EXECUCAO(1) > AGUARDANDO_APROVACAO(2) > EM_DIAGNOSTICO(3) > RECEBIDA(4)` e, dentro de cada grupo, pela data de inclusão (da mais antiga para a mais recente) — exclui automaticamente PAGA, ENTREGUE e CANCELADA
-- **Cancelamento em diagnóstico** (Perfil Técnico) — cancela todos os orçamentos vinculados, devolve as peças ao estoque e move a OS para `CANCELADA`
-- **Alteração genérica de status** (contingência do Perfil Administrativo) com validação das regras por status de destino
-- Suporte a **múltiplos orçamentos** (rejeitar e refazer)
-- Transições de status controladas com **máquina de estados**
-- **Notificação** ao cliente em cada transição de status (`log` com marcador `[NOTIFICAÇÃO FICTÍCIA]` por default, ou **e-mail real via SMTP** com `NOTIFICACAO_TIPO=smtp`)
 
-### Estoque e Suprimentos
-- Saldo de estoque **nunca negativo** (invariante no domínio)
-- 4 tipos de movimentação: `ENTRADA_NF`, `ESTORNO_NF`, `CONSUMO_ORCAMENTO`, `DEVOLUCAO_ORCAMENTO`
-- Peças consumidas ao serem adicionadas ao orçamento; devolvidas se o orçamento for rejeitado
-- Registro de NF de fornecedor com crédito automático no estoque e geração de conta a pagar
+- abertura de OS em `RECEBIDA`;
+- abertura unificada com itens;
+- diagnóstico e orçamento;
+- adição de serviços e peças;
+- aprovação, rejeição e novo orçamento;
+- execução, pagamento e entrega;
+- cancelamento durante diagnóstico;
+- alteração administrativa de status com validação;
+- relatório por prioridade e data;
+- exclusão de `PAGA`, `ENTREGUE` e `CANCELADA` da listagem ativa.
+
+### Estoque e suprimentos
+
+- estoque nunca negativo;
+- entrada por nota fiscal;
+- consumo por orçamento;
+- devolução em rejeição ou cancelamento;
+- rastreabilidade das movimentações.
 
 ### Financeiro
-- **Contas a pagar**: geradas na emissão de NF de fornecedor
-- **Contas a receber**: geradas na confirmação de pagamento da OS
-- Suporte a estorno de lançamentos
 
-### Relatórios
-- Tempo médio de execução por OS (baseado nos timestamps `inicio_execucao` e `fim_execucao`)
-- OS por status (grupos na ordem `EM_EXECUCAO > AGUARDANDO_APROVACAO > EM_DIAGNOSTICO > RECEBIDA`; dentro de cada grupo, por data de inclusão crescente)
+- conta a pagar gerada por nota fiscal;
+- conta a receber gerada no pagamento da OS;
+- suporte a estorno.
 
 ### Segurança
-- Autenticação via **JWT** (HMAC-SHA256) com validade configurável (1–1440 min)
-- Senhas hash com **BCrypt(12)**
-- 2 perfis de acesso: `FUNCIONARIO_DA_OFICINA` (admin) e `TECNICO_DA_OFICINA`
-- Hierarquia: funcionário herda todas as permissões do técnico
-- Consulta pública do status da OS **sem autenticação**
+
+- autenticação JWT;
+- senhas BCrypt;
+- perfis `FUNCIONARIO_DA_OFICINA` e `TECNICO_DA_OFICINA`;
+- consulta pública do status da OS.
 
 ---
 
-## Arquitetura — Clean Architecture (4 Anéis)
+## 4. Arquitetura
 
-O projeto segue os princípios da **Clean Architecture (Uncle Bob)**, organizado em **4 anéis** com dependências sempre apontando para dentro:
+### Clean Architecture — quatro anéis
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  4. INFRASTRUCTURE  (anel externo — composition root)           │
-│  SecurityConfig, AdminBootstrap, OpenApiConfig                  │
-│                                                                 │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │  3. ADAPTER  (interface adapters)                         │  │
-│  │  Controllers, DTOs, JPA Repos, JWT, Notification          │  │
-│  │                                                           │  │
-│  │  ┌─────────────────────────────────────────────────────┐  │  │
-│  │  │  2. USECASE  (application business rules)           │  │  │
-│  │  │  Services, Gateway interfaces                       │  │  │
-│  │  │                                                     │  │  │
-│  │  │  ┌───────────────────────────────────────────────┐  │  │  │
-│  │  │  │  1. DOMAIN  (enterprise business rules)       │  │  │  │
-│  │  │  │  Entities, Value Objects, Enums, Exceptions   │  │  │  │
-│  │  │  └───────────────────────────────────────────────┘  │  │  │
-│  │  └─────────────────────────────────────────────────────┘  │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+```text
+Infrastructure
+└── Adapter
+    └── Usecase
+        └── Domain
 ```
 
-**Regras de dependência:**
-- `domain` → **puro**: sem Spring, sem JPA, sem Servlet — apenas Java puro
-- `usecase` → depende de `domain`; define interfaces `*Gateway` e `*Repository`
-- `adapter` → implementa gateways e repositórios; depende de `usecase` e `domain`
-- `infrastructure` → composition root (configurações Spring); depende de `adapter`, `usecase` e `domain`
+- **Domain:** entidades, value objects, enums e exceções de negócio em Java puro.
+- **Usecase:** serviços de aplicação e interfaces de gateways/repositórios.
+- **Adapter:** controllers, DTOs, persistência JPA, JWT e notificações.
+- **Infrastructure:** configurações Spring, segurança, OpenAPI e composição da aplicação.
 
-Essas regras são **validadas automaticamente** por 5 testes ArchUnit a cada build.
+As dependências apontam para dentro. O domínio não depende de Spring, JPA, Servlet ou infraestrutura.
 
-![Clean Architecture — 4 anéis](docs-fase1/arquitetura/oficina-clean-arch-aneis.png)
+![img.png](docs-fase2/01-evidencias-fase-2/img.png)
 
-> Para um exemplo detalhado com teste de mesa percorrendo todos os 4 anéis, veja [`README-TESTE-DE-MESA.md`](docs-fase2/README-TESTE-DE-MESA.md).
+### Infraestrutura AWS
 
----
+A infraestrutura utiliza:
 
-## Arquitetura de Infraestrutura (AWS)
+- VPC com subnets públicas e privadas em duas zonas de disponibilidade;
+- Internet Gateway e NAT Gateway;
+- EKS Kubernetes 1.31;
+- node group `t3.medium`, desejado 2, mínimo 1 e máximo 3 nodes;
+- RDS PostgreSQL 16 `db.t3.micro`;
+- LoadBalancer para expor a aplicação;
+- GHCR para armazenar a imagem Docker;
+- HPA com 2–5 pods.
 
-A infraestrutura é provisionada via Terraform (`/infra`) na AWS, com a aplicação orquestrada por Kubernetes (EKS) e banco gerenciado (RDS):
+![img_1.png](docs-fase2/01-evidencias-fase-2/img_1.png)
 
-```
-┌──────────────────────────── AWS Cloud ─────────────────────────────┐
-│                                                                     │
-│  ┌──────────────────── VPC 10.0.0.0/16 ───────────────────────┐    │
-│  │                                                            │    │
-│  │   Subnets Públicas (2 AZs)        Subnets Privadas (2 AZs) │    │
-│  │   ┌──────────────────┐            ┌──────────────────────┐ │    │
-│  │   │ Internet Gateway │            │  EKS Cluster (1.31)  │ │    │
-│  │   │ NAT Gateway      │──────────▶ │  Node Group          │ │    │
-│  │   │ LoadBalancer(ELB)│            │  (t3.medium, 2–5)    │ │    │
-│  │   └──────────────────┘            │  ┌────────────────┐  │ │    │
-│  │            ▲                      │  │ oficina-app x2+ │  │ │    │
-│  │            │                      │  │ (HPA 2–5 pods)  │  │ │    │
-│  │   tráfego externo                 │  └───────┬────────┘  │ │    │
-│  │   (porta 80)                      │          │           │ │    │
-│  │                                   │  ┌───────▼────────┐  │ │    │
-│  │                                   │  │ RDS PostgreSQL │  │ │    │
-│  │                                   │  │ 16 (db.t3.micro)│ │ │    │
-│  │                                   │  └────────────────┘  │ │    │
-│  │                                   └──────────────────────┘ │    │
-│  └────────────────────────────────────────────────────────────┘    │
-│                                                                     │
-│   ECR (registry da imagem Docker)   ◀── push da imagem pelo CI/CD   │
-└─────────────────────────────────────────────────────────────────────┘
-```
+## 5. Tecnologias e pré-requisitos
 
-**Componentes provisionados** (detalhes em [`infra/README-infra.md`](./infra/README-infra.md)):
+### Tecnologias
 
-| Componente | Serviço AWS | Função |
-|---|---|---|
-| Rede | VPC + subnets + IGW + NAT | Isolamento e conectividade |
-| Orquestração | EKS (Kubernetes 1.31) | Executa os containers da aplicação |
-| Compute | EC2 (t3.medium, 2–5 nodes) | Worker nodes do cluster |
-| Banco de dados | RDS PostgreSQL 16 | Persistência gerenciada |
-| Registry | GHCR (ghcr.io) | Armazena a imagem Docker |
-
-![Arquitetura de Infraestrutura (AWS)](docs-fase1/arquitetura/oficina-infra-aws.png)
-
----
-
-## Fluxo de Deploy (CI/CD)
-
-O deploy é automatizado por **GitHub Actions** em dois workflows que se complementam (detalhes em [`README-BLOCO-G-CICD.md`](docs-fase2/README-BLOCO-G-CICD.md)):
-
-```
-  Desenvolvedor faz push / merge na main
-               │
-               ▼
-  ┌─────────────────────────────┐
-  │  CI  (.github/workflows/ci.yml)
-  │  1. Build (mvnw verify)     │
-  │  2. 106 testes + JaCoCo     │
-  │  3. SBOM (CycloneDX)        │
-  │  4. Trivy (vulnerabilidades)│
-  └──────────────┬──────────────┘
-                 │ sucesso
-                 ▼
-  ┌─────────────────────────────┐
-  │  CD  (.github/workflows/cd.yml)
-  │  G1. Docker build + push GHCR│
-  │  G2/G3. kubectl apply -f k8s/│
-  │     • namespace             │
-  │     • configmap + secret    │
-  │     • postgres (banco)      │
-  │     • app + service         │
-  │     • hpa (auto-scaling)    │
-  │     • rollout status        │
-  └──────────────┬──────────────┘
-                 ▼
-     Cluster Kubernetes atualizado
-        (app + banco no ar)
-```
-
-![Fluxo de Deploy (CI/CD)](docs-fase1/arquitetura/oficina-fluxo-cicd.png)
-
----
-
-## Diagramas de Arquitetura
-
-Coleção completa de diagramas (fontes versionados em [`docs/arquitetura/`](docs-fase1/arquitetura)):
-
-| Diagrama | Descrição |
+| Área | Tecnologia |
 |---|---|
-| [C4 — Nível 1 (Contexto)](docs-fase1/arquitetura/oficina-c4-nivel1.png) | Usuários e sistemas externos que interagem com a aplicação |
-| [C4 — Nível 2 (Contêiner)](docs-fase1/arquitetura/oficina-c4-nivel2.png) | Contêineres executáveis (API, banco, K8s Service/HPA, ConfigMap/Secret) |
-| [C4 — Nível 3 (Componente)](docs-fase1/arquitetura/oficina-c4-nivel3.png) | Componentes internos da API nos 4 anéis da Clean Architecture |
-| [Arquitetura lúdica (detalhada)](docs-fase1/arquitetura/oficina-arquitetura-ludica.png) | Visão fim a fim: GitHub → CI/CD → GHCR → AWS/EKS → RDS/Mailtrap + Terraform |
-| [Arquitetura (alto nível)](docs-fase1/arquitetura/oficina-arquitetura-altonivel.png) | Mesma visão colapsada em blocos macro para leitura rápida |
-| [Clean Architecture (4 anéis)](docs-fase1/arquitetura/oficina-clean-arch-aneis.png) | Anéis concêntricos com a regra de dependência (DIP) |
-| [Infraestrutura AWS](docs-fase1/arquitetura/oficina-infra-aws.png) | VPC, subnets, IGW/NAT, ELB, EKS, HPA, RDS provisionados por Terraform |
-| [Fluxo de Deploy (CI/CD)](docs-fase1/arquitetura/oficina-fluxo-cicd.png) | Pipeline CI → CD → `kubectl apply` no cluster |
-| [Processo (value stream)](docs-fase1/arquitetura/oficina-processo.png) | Fluxo de entrega em 6 fases com gates de qualidade |
-
----
-
-## Tecnologias
-
-| Camada | Tecnologia |
-|---|---|
-| Linguagem | Java 21 (LTS) |
-| Build | Maven 3.9 (via wrapper `./mvnw`) |
+| Linguagem | Java 21 |
 | Framework | Spring Boot 3.3.4 |
-| Persistência | Spring Data JPA + Hibernate 6 + Flyway |
-| Banco de Dados | PostgreSQL 16 |
-| Segurança | Spring Security 6 + JWT (jjwt) + BCrypt |
-| Validação | Jakarta Validation |
-| Documentação API | springdoc-openapi (Swagger UI) |
-| Observabilidade | Spring Actuator + Logback |
-| Containerização | Docker (multi-stage) + Docker Compose |
-| Testes | JUnit 5, AssertJ, Mockito, ArchUnit, Testcontainers, RestAssured |
-| Cobertura | JaCoCo (gate ≥ 80% em `domain.model`) |
-| Segurança (CI) | SBOM CycloneDX + Trivy |
+| Build | Maven Wrapper |
+| Banco | PostgreSQL 16 |
+| Persistência | Spring Data JPA, Hibernate e Flyway |
+| Segurança | Spring Security, JWT e BCrypt |
+| Testes | JUnit 5, Mockito, AssertJ, ArchUnit, Testcontainers 1.21.4+ e RestAssured |
+| Cobertura | JaCoCo |
+| Containers | Docker e Docker Compose |
+| Orquestração | Kubernetes 1.31 e HPA `autoscaling/v2` |
+| CI/CD | GitHub Actions e GHCR |
+| IaC | Terraform e HCP Terraform/Terraform Cloud |
+| Cloud | AWS VPC, EKS, EC2, RDS e LoadBalancer |
+
+### Programas necessários
+
+Instale e confirme no PowerShell:
+
+```powershell
+git --version
+docker --version
+docker compose version
+java -version
+minikube version
+kubectl version --client
+terraform version
+aws --version
+```
+
+Requisitos recomendados:
+
+- Windows 11 e PowerShell 5.1 ou 7;
+- Docker Desktop em execução, usando containers Linux;
+- Docker Engine 29 somente com Testcontainers 1.21.4 ou superior;
+- Java 21;
+- Minikube;
+- `kubectl` 1.31 ou uso de `minikube kubectl --` para evitar incompatibilidade com o cluster;
+- Terraform 1.5 ou superior;
+- AWS CLI;
+- conta no GitHub;
+- conta no HCP Terraform;
+- sessão ativa no AWS Academy apenas durante a etapa AWS.
+
+### Segurança
+
+Nunca publique ou grave em vídeo:
+
+- `AWS_ACCESS_KEY_ID`;
+- `AWS_SECRET_ACCESS_KEY`;
+- `AWS_SESSION_TOKEN`;
+- senha do RDS;
+- token do HCP Terraform;
+- credenciais SMTP;
+- conteúdo de Secrets Kubernetes.
+
+Credenciais do AWS Academy expiram quando o laboratório termina. Sempre use as três credenciais da mesma sessão.
 
 ---
 
-## Pré-requisitos
+## 6. Ordem recomendada da validação
 
-- **Docker Desktop** (Windows/Mac) ou **Docker Engine + Docker Compose v2** (Linux)
-- **Git**
-- (Opcional) **Java 21** — apenas se quiser rodar testes localmente fora do container
+Execute nesta ordem:
+
+1. clonar e conferir o projeto;
+2. executar os 120 testes e a validação arquitetural;
+3. validar Docker Compose;
+4. validar o fluxo funcional da API;
+5. validar Minikube;
+6. validar HPA localmente;
+7. publicar a branch `feature/*` e abrir o Pull Request;
+8. validar o CI;
+9. validar o build e a publicação da imagem pelo CD;
+10. criar/configurar o workspace do Terraform Cloud;
+11. provisionar VPC, EKS e RDS;
+12. implantar a imagem publicada no EKS;
+13. validar aplicação e HPA na AWS;
+14. coletar evidências;
+15. destruir a infraestrutura e encerrar o laboratório.
+
+O HPA aparece primeiro nos testes locais porque o Minikube permite validar escalabilidade sem consumir créditos AWS. No EKS é feita uma confirmação final.
 
 ---
 
-## Execução Local (Docker Compose)
+## 7. Preparar o projeto
 
-### 1. Clonar o repositório
+### Clonar o repositório
 
-```bash
+```powershell
 git clone https://github.com/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2.git
-cd fiap-tech-challenge-oficina-mecanica-fase2
+Set-Location .\fiap-tech-challenge-oficina-mecanica-fase2
 ```
 
-### 2. Subir a aplicação com Docker Compose
+### Conferir repositório e branch
 
-```bash
+```powershell
+git remote -v
+git branch --show-current
+git status
+```
+
+Para apenas reproduzir o projeto entregue, use a `main`:
+
+```powershell
+git checkout main
+git pull origin main
+```
+
+Para simular o ciclo de desenvolvimento, use uma branch que corresponda ao padrão do CD:
+
+```powershell
+git checkout -b feature/validacao-entrega
+```
+
+O padrão precisa começar com `feature/`. Nomes como `featurevalidacao` não acionam o estágio de staging definido em `cd.yml`.
+
+---
+
+## 8. Validar código, testes e arquitetura
+
+### Objetivo
+
+Esta etapa compila o projeto, inicia um PostgreSQL descartável com Testcontainers, executa testes unitários, arquiteturais e de integração, verifica a cobertura JaCoCo, gera o JAR e produz o SBOM CycloneDX. O Docker Desktop precisa estar acessível antes do Maven.
+
+### Confirmar a compatibilidade do Testcontainers
+
+Docker Engine 29 rejeita a API antiga usada pelo Testcontainers 1.20.2. O projeto deve usar 1.21.4 ou superior:
+
+```powershell
+Select-String `
+  -Path .\pom.xml `
+  -Pattern '<testcontainers.version>'
+```
+
+Resultado esperado:
+
+```xml
+<testcontainers.version>1.21.4</testcontainers.version>
+```
+
+### Restaurar o Docker Desktop antes dos testes
+
+Se esta janela já foi usada com `minikube docker-env`, remova o redirecionamento antes de executar o Maven:
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_TLS_VERIFY -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CERT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MINIKUBE_ACTIVE_DOCKERD -ErrorAction SilentlyContinue
+
+docker context use desktop-linux
+docker version
+docker info --format '{{.Name}}'
+```
+
+`docker version` deve mostrar **Client** e **Server**. O nome esperado é `docker-desktop`.
+
+> Se aparecer `Could not find a valid Docker environment`, não altere nem desative testes. Primeiro corrija o Docker Desktop ou a compatibilidade do Testcontainers.
+
+### Executar o build completo
+
+```powershell
+.\mvnw.cmd clean verify
+```
+
+Resultado esperado:
+
+```text
+Tests run: 120, Failures: 0, Errors: 0, Skipped: 0
+All coverage checks have been met.
+BUILD SUCCESS
+```
+
+O comando valida:
+
+- compilação de produção e testes;
+- testes unitários;
+- testes de integração com PostgreSQL/Testcontainers;
+- cinco regras ArchUnit;
+- cobertura JaCoCo;
+- gate mínimo de cobertura no domínio;
+- geração do JAR executável;
+- SBOM CycloneDX em XML e JSON.
+
+O aviso de artefato CycloneDX já anexado pode aparecer quando o plugin executa em mais de uma fase. Ele não representa falha quando o build termina em `BUILD SUCCESS`.
+
+### Conferir os artefatos
+
+```powershell
+Get-ChildItem .\target\surefire-reports\*.txt |
+  Select-String "Tests run:"
+
+Get-Item .\target\oficina-backend.jar
+Get-Item .\target\bom.xml
+Get-Item .\target\bom.json
+Start-Process .\target\site\jacoco\index.html
+```
+
+### Regras ArchUnit
+
+Os testes em `src/test/java/br/com/oficina/architecture/ArchitectureTest.java` garantem:
+
+1. dependências entre os quatro anéis;
+2. domínio sem Spring;
+3. domínio sem JPA/Hibernate;
+4. usecases sem dependência de adapters/infrastructure;
+5. adapters sem dependência de infrastructure.
+
+---
+
+## 9. Executar localmente com Docker Compose
+
+### Objetivo
+
+O Docker Compose cria PostgreSQL, aplicação e Adminer no Docker Desktop. Essa etapa valida o Dockerfile, as migrações Flyway, a conexão com o banco, o health check e a API antes do Kubernetes.
+
+### Garantir o contexto correto
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_TLS_VERIFY -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CERT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MINIKUBE_ACTIVE_DOCKERD -ErrorAction SilentlyContinue
+
+docker context use desktop-linux
+docker version
+```
+
+### Preparar uma execução limpa
+
+Preservar o volume existente:
+
+```powershell
+docker compose down --remove-orphans
+```
+
+Para apagar também o banco local e repetir tudo do zero:
+
+```powershell
+docker compose down -v --remove-orphans
+```
+
+### Subir os serviços
+
+```powershell
 docker compose up --build -d
+docker compose ps
 ```
 
-Esse comando sobe 3 serviços:
-- **db** — PostgreSQL 16 (porta 5432)
-- **app** — Aplicação Spring Boot (porta 8080)
-- **adminer** — Interface web para o banco de dados (porta 8081)
+Resultado esperado:
 
-### 3. Aguardar a aplicação ficar pronta
+- `oficina-db` em execução e saudável;
+- `oficina-app` em execução;
+- `oficina-adminer` em execução.
 
-```bash
-# Verificar se a aplicação está saudável
-curl http://localhost:8080/actuator/health
-```
+### Aguardar a aplicação ficar pronta
 
-Resposta esperada:
-```json
-{"status":"UP"}
-```
+```powershell
+$Health = $null
 
-### 4. Fazer login e obter o token JWT
+for ($Tentativa = 1; $Tentativa -le 36; $Tentativa++) {
+  try {
+    $Health = Invoke-RestMethod `
+      -Uri 'http://localhost:8080/actuator/health' `
+      -TimeoutSec 5
 
-A aplicação cria automaticamente um usuário administrador no primeiro boot:
-
-| Campo | Valor padrão |
-|---|---|
-| E-mail | `admin@oficina.local` |
-| Senha | `admin123` |
-
-```bash
-curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@oficina.local","senha":"admin123"}'
-```
-
-Resposta:
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiI...",
-  "expiresIn": 900,
-  "papel": "FUNCIONARIO_DA_OFICINA",
-  "email": "admin@oficina.local"
+    if ($Health.status -eq 'UP') {
+      break
+    }
+  }
+  catch {
+    Start-Sleep -Seconds 5
+  }
 }
+
+if ($null -eq $Health -or $Health.status -ne 'UP') {
+  docker compose ps
+  docker compose logs --tail=150 app
+  docker compose logs --tail=100 db
+  throw 'A aplicação não ficou saudável no tempo esperado.'
+}
+
+$Health
+Test-NetConnection localhost -Port 8080
 ```
 
-### 5. Usar o token nas requisições autenticadas
+Resultado esperado: `status = UP` e `TcpTestSucceeded = True`.
 
-```bash
-# Salvar o token em uma variável
-TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@oficina.local","senha":"admin123"}' | jq -r '.accessToken')
+Se `Invoke-RestMethod` responder `Impossível conectar-se ao servidor remoto`, a aplicação ainda não iniciou. Não é erro de login ou JWT.
 
-# Exemplo: listar clientes
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/clientes
+### Consultar logs sem parar os containers
+
+```powershell
+docker compose logs --tail=100 app
+docker compose logs --tail=100 db
 ```
 
-### 6. Acessar o Swagger UI
+Para acompanhar continuamente:
 
-Abra no navegador: **http://localhost:8080/swagger-ui.html**
+```powershell
+docker compose logs -f app
+```
 
-O Swagger UI lista todos os endpoints organizados em 4 grupos:
-1. **01 — Autenticação** — login e cadastro de usuários
-2. **02 — Administrativo** — clientes, veículos, serviços, peças, estoque, NF, OS, financeiro, relatórios
-3. **03 — Técnico** — diagnóstico, orçamento, execução, finalização
-4. **04 — Cliente** — aprovação, rejeição, pagamento, consulta pública
+Use `Ctrl+C` para sair dos logs sem parar os serviços.
 
-### 7. Acessar o Adminer (interface do banco)
+### Abrir Swagger e Adminer
 
-Abra no navegador: **http://localhost:8081**
+```powershell
+Start-Process http://localhost:8080/swagger-ui/index.html
+Start-Process http://localhost:8081
+```
 
-| Campo | Valor |
+Adminer:
+
+| Campo | Valor local |
 |---|---|
 | Sistema | PostgreSQL |
-| Servidor | db |
-| Usuário | oficina |
-| Senha | oficina |
-| Base de dados | oficina |
+| Servidor | `db` |
+| Usuário | `oficina` |
+| Senha | `oficina` |
+| Base | `oficina` |
 
-### 8. Parar a aplicação
+### Manter os serviços para o fluxo funcional
 
-```bash
+Não encerre o Compose antes do tópico 10. O login e os demais comandos da API dependem da aplicação escutando em `localhost:8080`.
+
+Ao terminar o tópico 10, encerre os containers antes do Minikube para liberar memória e portas:
+
+```powershell
 docker compose down
 ```
 
-Para remover também os volumes (dados do banco):
-```bash
-docker compose down -v
-```
+Não use `-v` nesse momento se quiser preservar o banco local.
 
 ---
 
-## Deploy em Kubernetes
+## 10. Validar o fluxo funcional da API
 
-Os manifestos estão em [`/k8s`](./k8s) e cobrem Deployments, Services, ConfigMap, Secret e HPA. Há duas formas de validar: **local (Minikube)** ou **cloud (EKS)**.
+O bloco abaixo executa o fluxo principal de uma OS. Use-o com Docker Compose, Minikube ou EKS alterando apenas `$BaseUrl`.
 
-### Opção A — Local com Minikube
+Para uma base limpa, execute primeiro `docker compose down -v` e suba novamente os containers.
 
-```bash
-# 1. Remover somente o perfil local incompleto
+### Definir URL e autenticar
+
+```powershell
+$BaseUrl = "http://localhost:8080"
+
+$Login = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/auth/login" `
+  -ContentType "application/json" `
+  -Body (@{
+    email = "admin@oficina.local"
+    senha = "admin123"
+  } | ConvertTo-Json)
+
+$Token = $Login.accessToken
+$Headers = @{ Authorization = "Bearer $Token" }
+
+$Login | Format-List
+```
+
+### Cadastrar cliente
+
+```powershell
+$Cliente = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/clientes" `
+  -Headers $Headers `
+  -ContentType "application/json" `
+  -Body (@{
+    nome = "Joao Teste"
+    documento = "52998224725"
+    email = "joao.teste@example.com"
+    telefone = "11999999999"
+  } | ConvertTo-Json)
+
+$IdCliente = $Cliente.idCliente
+$Cliente
+```
+
+### Cadastrar veículo
+
+```powershell
+$Veiculo = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/veiculos" `
+  -Headers $Headers `
+  -ContentType "application/json" `
+  -Body (@{
+    placa = "ABC1234"
+    marca = "Fiat"
+    modelo = "Uno"
+    ano = 2020
+    idCliente = $IdCliente
+  } | ConvertTo-Json)
+
+$Veiculo
+```
+
+### Cadastrar serviço
+
+```powershell
+$Servico = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/servicos" `
+  -Headers $Headers `
+  -ContentType "application/json" `
+  -Body (@{
+    nome = "Troca de oleo"
+    descricao = "Troca completa de oleo"
+    precoBase = 150.00
+  } | ConvertTo-Json)
+
+$IdServico = $Servico.idServico
+$Servico
+```
+
+### Abrir Ordem de Serviço
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico" `
+  -Headers $Headers `
+  -ContentType "application/json" `
+  -Body (@{
+    idCliente = $IdCliente
+    placa = "ABC1234"
+    descricaoProblema = "Barulho no motor"
+  } | ConvertTo-Json)
+
+$NumeroOs = $Os.numero
+$Os
+```
+
+Resultado esperado: `RECEBIDA`.
+
+### Adicionar serviço
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/servicos" `
+  -Headers $Headers `
+  -ContentType "application/json" `
+  -Body (@{
+    idServicoSku = $IdServico
+    quantidade = 1
+  } | ConvertTo-Json)
+
+$Os.status
+```
+
+Resultado esperado: `EM_DIAGNOSTICO`.
+
+### Enviar orçamento para aprovação
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/enviar-para-aprovacao" `
+  -Headers $Headers
+
+$Os.status
+```
+
+Resultado esperado: `AGUARDANDO_APROVACAO`.
+
+### Aprovar orçamento como cliente
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/aprovar"
+
+$Os.status
+```
+
+Resultado esperado: `EM_EXECUCAO`.
+
+### Concluir reparo
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/concluir-reparo" `
+  -Headers $Headers
+
+$Os.status
+```
+
+Resultado esperado: `AGUARDANDO_PAGAMENTO`.
+
+### Confirmar pagamento
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/confirmar-pagamento" `
+  -ContentType "application/json" `
+  -Body (@{ comprovante = "PIX-12345" } | ConvertTo-Json)
+
+$Os.status
+```
+
+Resultado esperado: `PAGA`.
+
+### Entregar veículo
+
+```powershell
+$Os = Invoke-RestMethod `
+  -Method Post `
+  -Uri "$BaseUrl/ordens-servico/$NumeroOs/entregar" `
+  -Headers $Headers
+
+$Os.status
+```
+
+Resultado esperado: `ENTREGUE`.
+
+### Consultar status público e relatórios
+
+```powershell
+Invoke-RestMethod "$BaseUrl/consulta/ordens-servico/$NumeroOs/status"
+
+Invoke-RestMethod `
+  -Uri "$BaseUrl/relatorios/os-por-status" `
+  -Headers $Headers
+
+Invoke-RestMethod `
+  -Uri "$BaseUrl/relatorios/tempo-medio-por-os" `
+  -Headers $Headers
+```
+
+A OS entregue não deve aparecer na listagem ativa.
+
+---
+
+## 11. Executar localmente com Minikube
+
+### Objetivo
+
+O Minikube cria um cluster Kubernetes local equivalente ao fluxo básico usado no EKS. A imagem da aplicação é construída no daemon Docker interno do cluster, e os manifestos implantam namespace, ConfigMap, Secret, PostgreSQL, PVC, Services, aplicação, probes e HPA.
+
+Essa etapa existe para validar Kubernetes e escalabilidade sem consumir créditos do AWS Academy. A execução deve ser sequencial: cluster saudável → imagem → banco pronto → aplicação → HPA.
+
+### Encerrar o ambiente Docker Compose
+
+O tópico 10 usa as portas 5432, 8080 e 8081 e também consome memória do Docker Desktop. Encerre-o antes do Minikube:
+
+```powershell
+docker compose down
+```
+
+Não use `-v` se quiser preservar os dados do banco local.
+
+### Restaurar o Docker Desktop antes de criar o cluster
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_TLS_VERIFY -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CERT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MINIKUBE_ACTIVE_DOCKERD -ErrorAction SilentlyContinue
+
+docker context use desktop-linux
+docker version
+```
+
+### Criar uma execução integral do zero
+
+Para uma validação completa e reproduzível, remova o perfil anterior:
+
+```powershell
 minikube delete -p minikube
+```
 
-# 2. Recriar usando Kubernetes 1.31, versão alinhada ao projeto
-minikube start --driver=docker --cpus=2 --memory=4096 --kubernetes-version=v1.31.0
+Esse comando é obrigatório apenas quando o objetivo é recomeçar do zero ou quando o perfil está incompleto. Em uso cotidiano, um perfil saudável pode ser reutilizado.
 
-# 3. Confirmar que o item 1 terminou corretamente
+### Criar o cluster com Kubernetes 1.31
+
+```powershell
+minikube start `
+  --driver=docker `
+  --cpus=2 `
+  --memory=4096 `
+  --kubernetes-version=v1.31.0
+```
+
+A versão precisa ser fixada para ficar alinhada ao projeto e ao EKS.
+
+> **Critério de parada:** se `minikube start` terminar com erro, não execute `docker-env`, `docker build` nem `kubectl apply`.
+
+### Conferir obrigatoriamente o cluster
+
+```powershell
 minikube status
-kubectl get nodes
+minikube kubectl -- get nodes
+```
 
-#Resultado esperado:
-#host: Running
-#kubelet: Running
-#apiserver: Running
-#kubeconfig: Configured
+Resultado esperado:
 
-# 2. Apontar o Docker para o Minikube e buildar a imagem
-#    A imagem TEM que ser buildada ANTES do apply (o manifesto usa imagePullPolicy: IfNotPresent; sem a imagem local, os pods ficam em ErrImagePull).
-& minikube -p minikube docker-env --shell powershell | Invoke-Expression
-docker build -t oficina-backend:latest .
+```text
+host: Running
+kubelet: Running
+apiserver: Running
+kubeconfig: Configured
+```
 
-#Para comprovar que a imagem foi criada dentro do Docker do Minikube:
+O node `minikube` deve aparecer como `Ready` e versão `v1.31.0`. Use `minikube kubectl --` nos comandos locais para evitar incompatibilidade entre um cliente `kubectl` mais novo e o servidor 1.31.
+
+### Habilitar o metrics-server antes do HPA
+
+```powershell
+minikube addons enable metrics-server
+
+minikube kubectl -- rollout status deployment/metrics-server `
+  -n kube-system `
+  --timeout=180s
+```
+
+O HPA pode exibir métricas como `<unknown>` nos primeiros segundos; isso é normal até o `metrics-server` coletar os dados.
+
+### Apontar o Docker para o Minikube
+
+```powershell
+& minikube -p minikube docker-env --shell powershell |
+  Invoke-Expression
+
+$env:MINIKUBE_ACTIVE_DOCKERD
+docker info --format '{{.Name}}'
+```
+
+Os dois últimos comandos devem retornar `minikube`. O redirecionamento vale somente para a janela atual do PowerShell.
+
+### Validar DNS antes do build
+
+```powershell
+minikube ssh -- "nslookup repo.maven.apache.org"
+```
+
+Se o nome não for resolvido, não prossiga. Um erro como `wget: bad address 'repo.maven.apache.org'` indica problema de DNS/rede do ambiente, não do Dockerfile.
+
+### Construir e conferir a imagem
+
+Para a execução completa, reconstrua sem cache:
+
+```powershell
+docker build --no-cache -t oficina-backend:latest .
+```
+
+Considere o build válido somente se terminar em `FINISHED`. Depois confirme:
+
+```powershell
 minikube image ls | Select-String "oficina-backend"
-
-#Deve aparecer docker.io/library/oficina-backend:latest (ou nome equivalente
-
-# 3. Aplicar os manifestos — o namespace PRIMEIRO
-#    (kubectl aplica a pasta em ordem alfabética; sem isso, app/configmap/hpa
-#     falham com 'namespaces "oficina" not found')
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/
-
-# 4. Aguardar os pods ficarem prontos (Ctrl+C quando ambos estiverem 1/1 Running)
-kubectl get pods -n oficina -w
-
-# 5. Acessar a aplicação
-kubectl port-forward svc/oficina-app 8080:80 -n oficina
-# Abra: http://localhost:8080/swagger-ui/index.html
 ```
 
-> 🪟 **No Windows (PowerShell)** o `eval $(minikube docker-env)` não funciona. Use:
-> ```powershell
-> & minikube -p minikube docker-env --shell powershell | Invoke-Expression
-> ```
-> Esse comando vale **só para a janela atual** do PowerShell — se abrir outra, rode de novo antes de `docker build`.
->
-> 💡 Após um `kubectl rollout restart deployment/oficina-app -n oficina`, o `port-forward` antigo cai (estava preso ao pod removido). Rode o `kubectl port-forward ...` de novo apontando para os pods novos.
+Resultado esperado:
 
-### Opção B — Cloud (AWS EKS)
+```text
+docker.io/library/oficina-backend:latest
+```
 
-Na nuvem há detalhes que **não** existem no local (imagem vinda de registry público, banco no RDS com endpoint que muda a cada apply, LoadBalancer/ELB, custo). Por isso, **siga o runbook dedicado e já testado**: [`RUNBOOK-EXECUCAO-AWS-ACADEMY.md`](docs-fase2/RUNBOOK-EXECUCAO-AWS-ACADEMY.md).
+### Conferir os recursos de memória da aplicação
 
-Resumo do que muda em relação ao local:
+O consumo normal observado da JVM foi superior a 256 Mi. Para evitar escala em repouso, o Deployment deve reservar 512 Mi e limitar em 768 Mi:
 
-| Ponto | Local (Minikube) | Cloud (AWS EKS) |
-|---|---|---|
-| Imagem | buildada localmente (`oficina-backend:latest`) | registry **público** (`ghcr.io/tiagomiele/...`) |
-| Banco | PostgreSQL no cluster (`postgres-*.yaml`) | **RDS** — `DB_URL` derivado do `terraform output` (muda a cada apply) |
-| Acesso | `port-forward` → `localhost:8080` | **LoadBalancer/ELB** com URL pública |
-| Custo | grátis | consome crédito → rode `terraform destroy` no fim |
+```powershell
+Select-String `
+  -Path .\k8s\app-deployment.yaml `
+  -Pattern 'resources:|requests:|limits:|memory:|cpu:'
+```
 
-### Recursos aplicados
+Valores esperados:
 
-| Recurso | Arquivo | Função |
-|---|---|---|
-| Namespace | `namespace.yaml` | Isola os recursos no namespace `oficina` |
-| ConfigMap | `configmap.yaml` | Variáveis não-sensíveis (URL do banco, porta) |
-| Secret | `secret.yaml` | Variáveis sensíveis (senha do banco, JWT) |
-| Deployment (banco) | `postgres-deployment.yaml` + `postgres-pvc.yaml` | PostgreSQL com volume persistente |
-| Service (banco) | `postgres-service.yaml` | ClusterIP 5432 (acesso interno) |
-| Deployment (app) | `app-deployment.yaml` | 2 réplicas, probes, rolling update |
-| Service (app) | `app-service.yaml` | LoadBalancer 80 → 8080 (acesso externo) |
-| HPA | `hpa.yaml` | Auto-scaling 2–5 pods quando CPU > 70% |
+```yaml
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "250m"
+  limits:
+    memory: "768Mi"
+    cpu: "500m"
+```
 
-> Guia detalhado de validação (passo a passo + troubleshooting): [`README-GUIA-VALIDACAO-K8S-TERRAFORM.md`](docs-fase2/README-GUIA-VALIDACAO-K8S-TERRAFORM.md).
+### Aplicar namespace, configurações e PostgreSQL
+
+```powershell
+minikube kubectl -- apply -f .\k8s\namespace.yaml
+minikube kubectl -- apply -f .\k8s\configmap.yaml
+minikube kubectl -- apply -f .\k8s\secret.yaml
+minikube kubectl -- apply -f .\k8s\postgres-pvc.yaml
+minikube kubectl -- apply -f .\k8s\postgres-service.yaml
+minikube kubectl -- apply -f .\k8s\postgres-deployment.yaml
+```
+
+Aguarde o banco:
+
+```powershell
+minikube kubectl -- rollout status deployment/oficina-db `
+  -n oficina `
+  --timeout=180s
+
+minikube kubectl -- get pods -n oficina
+```
+
+Só prossiga quando `oficina-db` estiver `1/1 Running`.
+
+### Aplicar a aplicação e o HPA
+
+```powershell
+minikube kubectl -- apply -f .\k8s\app-service.yaml
+minikube kubectl -- apply -f .\k8s\app-deployment.yaml
+
+minikube kubectl -- rollout status deployment/oficina-app `
+  -n oficina `
+  --timeout=300s
+
+minikube kubectl -- apply -f .\k8s\hpa.yaml
+```
+
+Essa ordem evita que a aplicação inicie antes do PostgreSQL. Quando banco e aplicação foram criados simultaneamente, a aplicação entrou em `CrashLoopBackOff`.
+
+### Conferir todos os recursos
+
+```powershell
+minikube kubectl -- get pods,svc,hpa,pvc -n oficina
+```
+
+Resultado esperado:
+
+- PostgreSQL `1/1 Running`, sem reinícios;
+- duas réplicas da aplicação `1/1 Running`, sem reinícios;
+- PVC `Bound`, 5 GiB, StorageClass `standard`;
+- HPA com mínimo 2, máximo 5;
+- `EXTERNAL-IP` do Service pode permanecer `<pending>` no Minikube.
+
+### Abrir o port-forward em outra janela
+
+```powershell
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'minikube kubectl -- port-forward svc/oficina-app 8080:80 -n oficina'
+```
+
+### Validar health e Swagger
+
+```powershell
+Test-NetConnection localhost -Port 8080
+Invoke-RestMethod http://localhost:8080/actuator/health
+Start-Process http://localhost:8080/swagger-ui/index.html
+```
+
+Resultado esperado: porta acessível e health `UP`. Depois de qualquer restart/rollout, reinicie o port-forward se a conexão tiver sido encerrada.
 
 ---
 
-## Provisionamento da Infraestrutura (Terraform)
+## 12. Validar escalabilidade com HPA no Minikube
 
-Os scripts estão em [`/infra`](./infra) e provisionam toda a infraestrutura AWS (VPC, EKS e RDS).
+### Objetivo
 
-### Pré-requisitos
+Esta etapa comprova que o HPA lê métricas reais de CPU e memória e altera a quantidade de pods entre 2 e 5 réplicas. Primeiro confirme uma linha de base estável; somente depois gere carga.
 
-- **AWS CLI** configurado (`aws configure`)
-- **Terraform** >= 1.5
-- **kubectl** >= 1.30
+### Aguardar e validar as métricas
 
-### Passo a passo
+```powershell
+Start-Sleep -Seconds 45
 
-```bash
-cd infra
-
-# 1. Copiar e ajustar as variáveis (região, senha do banco, etc.)
-cp terraform.tfvars.example terraform.tfvars
-
-# 2. Inicializar o Terraform (baixa o provider AWS)
-terraform init
-
-# 3. Visualizar o que será criado
-terraform plan
-
-# 4. Provisionar a infraestrutura (~15-20 min)
-terraform apply
-
-# 5. Configurar o kubectl para o cluster criado (usar o output do apply)
-aws eks update-kubeconfig --region us-east-1 --name oficina-dev
+minikube kubectl -- top nodes
+minikube kubectl -- top pods -n oficina
+minikube kubectl -- get hpa oficina-app-hpa -n oficina
+minikube kubectl -- describe hpa oficina-app-hpa -n oficina
 ```
 
-Ao final, o Terraform exibe os outputs (nome/endpoint do cluster, endpoint do RDS e o comando do kubectl). A documentação completa dos recursos, custos estimados e instruções de destruição (`terraform destroy`) está em [`infra/README-infra.md`](./infra/README-infra.md).
+Configuração esperada:
 
-> Passo a passo completo de execução em todos os ambientes (local, Minikube e AWS): [`README-GUIA-EXECUCAO-COMPLETO.md`](./README-GUIA-EXECUCAO-COMPLETO.md).
+- mínimo: 2 pods;
+- máximo: 5 pods;
+- CPU: 70%;
+- memória: 80%;
+- scale-up: no máximo um pod por minuto;
+- scale-down: janela de estabilização de cinco minutos.
 
----
+As condições atuais devem mostrar `AbleToScale=True` e `ScalingActive=True`. Eventos antigos `FailedGetResourceMetric` podem permanecer no `describe` se foram gerados antes de o `metrics-server` ficar pronto.
 
-## Variáveis de Ambiente
+### Confirmar uma linha de base estável
 
-| Variável | Default | Descrição |
-|---|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/oficina` | URL JDBC do banco |
-| `DB_USER` | `oficina` | Usuário do banco |
-| `DB_PASSWORD` | `oficina` | Senha do banco |
-| `JWT_SECRET` | placeholder (≥ 32 bytes) | Chave HMAC para tokens JWT. **Trocar em produção.** Gere com: `openssl rand -base64 48` |
-| `ADMIN_EMAIL` | `admin@oficina.local` | E-mail do admin criado no bootstrap |
-| `ADMIN_PASSWORD` | `admin123` | Senha do admin criado no bootstrap |
-| `SERVER_PORT` | `8080` | Porta HTTP da aplicação |
-| `SPRING_PROFILES_ACTIVE` | (vazio) | Perfil Spring ativo |
-| `NOTIFICACAO_TIPO` | `log` | `log` registra a notificação no log; `smtp` envia e-mail real |
-| `NOTIFICACAO_REMETENTE` | `nao-responder@oficina.local` | Remetente dos e-mails (modo `smtp`) |
-| `MAIL_HOST` | (vazio) | Host SMTP (ex.: `sandbox.smtp.mailtrap.io`) — usado quando `NOTIFICACAO_TIPO=smtp` |
-| `MAIL_PORT` | `587` | Porta SMTP |
-| `MAIL_USERNAME` | (vazio) | Usuário SMTP |
-| `MAIL_PASSWORD` | (vazio) | Senha SMTP |
+Antes da carga, CPU e memória devem estar abaixo dos alvos e o Deployment deve permanecer com 2 réplicas.
 
-### Notificação de status por e-mail
+Se a memória estiver acima de 80% sem carga, não inicie os geradores. Confira se `requests.memory=512Mi` e `limits.memory=768Mi` estão aplicados:
 
-A cada transição de status da OS o cliente é notificado. Há dois modos, selecionados por `NOTIFICACAO_TIPO`:
-
-- **`log`** (default): registra a notificação no log com o marcador `[NOTIFICAÇÃO FICTÍCIA]`. Não exige servidor de e-mail — ideal para desenvolvimento, testes e CI.
-- **`smtp`**: envia um e-mail real via SMTP usando as variáveis `MAIL_*`. Para a demonstração recomenda-se o **[Mailtrap](https://mailtrap.io)** (caixa *sandbox* gratuita):
-
-  ```bash
-  NOTIFICACAO_TIPO=smtp
-  MAIL_HOST=sandbox.smtp.mailtrap.io
-  MAIL_PORT=587
-  MAIL_USERNAME=<usuario-do-inbox>
-  MAIL_PASSWORD=<senha-do-inbox>
-  ```
-
-  Veja [`.env.example`](./.env.example) para o conjunto completo de variáveis.
-
----
-
-## Documentação e Collection das APIs
-
-Após subir a aplicação, a documentação interativa (que serve como **collection completa das APIs**) está disponível em:
-
-- **Swagger UI**: http://localhost:8080/swagger-ui.html
-- **OpenAPI JSON (spec/collection)**: http://localhost:8080/v3/api-docs
-
-Cada endpoint possui:
-- Descrição detalhada via `@Operation`
-- Schemas de request/response com exemplos preenchidos
-- Códigos de resposta documentados (200, 201, 204, 400, 401, 403, 404, 409, 422)
-
-### Exportar a collection
-
-A especificação OpenAPI pode ser exportada e importada em qualquer cliente (Postman, Insomnia, etc.):
-
-```bash
-# Baixar a spec OpenAPI (JSON) com a aplicação rodando
-curl http://localhost:8080/v3/api-docs -o oficina-openapi.json
+```powershell
+minikube kubectl -- get deployment oficina-app `
+  -n oficina `
+  -o jsonpath='{.spec.template.spec.containers[0].resources}'
 ```
 
-- **Postman**: `Import` → selecione o arquivo `oficina-openapi.json` (o Postman gera a collection automaticamente).
-- **Insomnia**: `Import/Export` → `Import Data` → `From File`.
+Se o Deployment tiver acabado de ser corrigido e ainda houver 3 ou mais réplicas, aguarde pelo menos 300 segundos para o scale-down.
 
----
+### Acompanhar HPA e pods em janelas separadas
 
-## Endpoints Principais
+Não use `kubectl get hpa,pods -w`; o modo watch utilizado aceitou somente um tipo de recurso por comando.
 
-| Área | Rota | Método | Auth |
-|---|---|---|---|
-| **Login** | `/auth/login` | POST | Pública |
-| **Cadastro de usuário** | `/usuarios` | POST | JWT (admin) |
-| **Clientes** | `/clientes` | POST/GET/PUT | JWT (admin) |
-| **Veículos** | `/veiculos` | POST/GET/PUT | JWT (admin) |
-| **Serviços** | `/servicos` | POST/GET/PUT | JWT (admin) |
-| **Peças** | `/pecas` | POST/GET/PUT | JWT (admin) |
-| **Estoque** | `/estoque` | GET | JWT (admin) |
-| **NF Fornecedor** | `/notas-fiscais-fornecedor` | POST/GET | JWT (admin) |
-| **Abrir OS (unificada)** | `/ordens-servico` | POST | JWT (admin) |
-| **Abrir OS (Recebida)** | `/ordens-servico/recebida` | POST | JWT (admin) |
-| **Alterar status da OS (contingência)** | `/ordens-servico/{numeroOs}/status` | PATCH | JWT (admin) |
-| **Contas a pagar** | `/contas-a-pagar` | GET | JWT (admin) |
-| **Contas a receber** | `/contas-a-receber` | GET | JWT (admin) |
-| **Relatório tempo médio por OS** | `/relatorios/tempo-medio-por-os` | GET | JWT (admin) |
-| **Relatório OS por status** | `/relatorios/os-por-status` | GET | JWT (admin) |
-| **Adicionar serviço à OS** | `/ordens-servico/{numeroOs}/servicos` | POST | JWT (técnico) |
-| **Adicionar peça à OS** | `/ordens-servico/{numeroOs}/pecas` | POST | JWT (técnico) |
-| **Enviar para aprovação** | `/ordens-servico/{numeroOs}/enviar-para-aprovacao` | POST | JWT (técnico) |
-| **Concluir reparo** | `/ordens-servico/{numeroOs}/concluir-reparo` | POST | JWT (técnico) |
-| **Entregar veículo** | `/ordens-servico/{numeroOs}/entregar` | POST | JWT (técnico) |
-| **Cancelar OS em diagnóstico** | `/ordens-servico/{numeroOs}/cancelar-diagnostico` | POST | JWT (técnico) |
-| **Aprovar orçamento** | `/ordens-servico/{numeroOs}/aprovar` | POST | Pública |
-| **Rejeitar e refazer** | `/ordens-servico/{numeroOs}/rejeitar-refazer` | POST | Pública |
-| **Rejeitar e cancelar** | `/ordens-servico/{numeroOs}/rejeitar-cancelar` | POST | Pública |
-| **Confirmar pagamento** | `/ordens-servico/{numeroOs}/confirmar-pagamento` | POST | Pública |
-| **Consultar status (público)** | `/consulta/ordens-servico/{numeroOs}/status` | GET | Pública |
+```powershell
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'minikube kubectl -- get hpa -n oficina -w'
 
----
-
-## Fluxo da Ordem de Serviço
-
-A OS segue uma máquina de estados controlada pelo domínio:
-
-```
-RECEBIDA → EM_DIAGNOSTICO → AGUARDANDO_APROVACAO → EM_EXECUCAO → AGUARDANDO_PAGAMENTO → PAGA → ENTREGUE
-                  ↑                    |
-                  |         rejeitarRefazer()
-                  └────────────────────┘
-                                       |
-                            rejeitarCancelar() → CANCELADA → ENTREGUE
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'minikube kubectl -- get pods -n oficina -w'
 ```
 
-**Passo a passo:**
+### Gerar carga dentro do cluster
 
-1. **Abrir OS** (`POST /api/v1/ordens-servico`) → cria com status `RECEBIDA` ou `EM_DIAGNOSTICO` (se já houver itens)
-2. **Adicionar serviços/peças** → transita para `EM_DIAGNOSTICO`. Peças consomem estoque imediatamente
-3. **Enviar para aprovação** → `AGUARDANDO_APROVACAO`
-4. **Cliente aprova** → `EM_EXECUCAO` (grava `inicio_execucao`)
-5. **Concluir reparo** → `AGUARDANDO_PAGAMENTO` (grava `fim_execucao`)
-6. **Confirmar pagamento** → `PAGA` (gera lançamento financeiro)
-7. **Entregar veículo** → `ENTREGUE`
-
-**Caminhos alternativos:**
-- **Rejeitar e refazer**: cancela o orçamento atual, abre um novo, estorna peças → volta para `EM_DIAGNOSTICO`
-- **Rejeitar e cancelar**: cancela o orçamento, estorna peças → `CANCELADA` → pode entregar o veículo
-
----
-
-## Estrutura do Projeto
-
+```powershell
+1..10 | ForEach-Object {
+  minikube kubectl -- run "load-generator-$_" `
+    -n oficina `
+    --image=busybox:1.36 `
+    --restart=Never `
+    -- /bin/sh -c "while true; do wget -q -O- http://oficina-app/actuator/health > /dev/null; done"
+}
 ```
-src/main/java/br/com/oficina/
-├── OficinaApplication.java                # Ponto de entrada
-│
-├── domain/                                # ANEL 1 — DOMAIN (regras de negócio puras)
-│   ├── model/                             #   Entidades e Value Objects
-│   │   ├── OrdemServico.java              #     Raiz de agregado (ciclo da OS)
-│   │   ├── ItemOrcamento.java             #     Itens do orçamento
-│   │   ├── Cliente.java, Veiculo.java     #     Entidades de cadastro
-│   │   ├── Dinheiro.java                  #     Value Object monetário
-│   │   ├── Documento.java                 #     Value Object CPF/CNPJ
-│   │   ├── NumeroOS.java                  #     Value Object formato OS-MMAAAA-NNNNNN
-│   │   ├── Placa.java                     #     Value Object placa veicular
-│   │   └── ...                            #     EstoquePeca, Servico, Peca, etc.
-│   ├── enums/                             #   StatusOrdemServico, TipoItem, etc.
-│   └── exception/                         #   BusinessException
-│
-├── usecase/                               # ANEL 2 — USECASE (regras de aplicação)
-│   ├── OrdemServicoServiceImpl.java       #   Lógica de aplicação da OS
-│   ├── ClienteServiceImpl.java            #   CRUD de clientes
-│   ├── EstoqueServiceImpl.java            #   Gestão de estoque
-│   ├── ...                                #   Demais services
-│   └── gateway/                           #   Interfaces (contratos de saída)
-│       ├── ClienteRepository.java         #     Contrato para persistência de clientes
-│       ├── NotificacaoGateway.java        #     Contrato para notificações
-│       ├── TokenGateway.java              #     Contrato para geração de tokens
-│       ├── RelatorioGateway.java          #     Contrato para relatórios
-│       └── ...                            #     Demais gateways
-│
-├── adapter/                               # ANEL 3 — ADAPTER (interface adapters)
-│   ├── controller/                        #   Controllers REST (4 controllers)
-│   │   ├── AuthController.java
-│   │   ├── AdministrativoOficinaController.java
-│   │   ├── TecnicoOficinaController.java
-│   │   └── ClienteOficinaController.java
-│   ├── persistence/                       #   JPA Entities + Repository implementations
-│   │   ├── *JpaEntity.java                #     Entidades JPA (mapeamento ORM)
-│   │   ├── Jpa*Repository.java            #     Implementações dos gateways
-│   │   └── SpringData*Repository.java     #     Interfaces Spring Data
-│   ├── security/                          #   JWT (geração e validação de tokens)
-│   │   ├── JwtTokenService.java           #     Implementa TokenGateway
-│   │   ├── JwtAuthenticationFilter.java   #     Filtro de autenticação
-│   │   └── JwtProperties.java             #     Propriedades JWT
-│   ├── notification/                      #   LogNotificacaoGateway (notificação fictícia)
-│   ├── dto/                               #   Objetos de transporte (response)
-│   └── exception/                         #   GlobalExceptionHandler, ApiError, RequestIdFilter
-│
-├── infrastructure/                        # ANEL 4 — INFRASTRUCTURE (composition root)
-│   └── config/                            #   Configurações Spring
-│       ├── SecurityConfig.java            #     Spring Security + filtros
-│       ├── AdminBootstrap.java            #     Criação do admin no primeiro boot
-│       ├── OpenApiConfig.java             #     Swagger/OpenAPI
-│       └── SwaggerOrderConfig.java        #     Ordenação customizada no Swagger UI
-│
-src/test/java/br/com/oficina/
-├── architecture/                          # Testes ArchUnit (5 regras)
-├── domain/model/                          # Testes unitários do domínio
-├── domain/exception/                      # Testes de exceções
-└── integration/                           # Testes E2E (Testcontainers + RestAssured)
+
+Acompanhe periodicamente:
+
+```powershell
+minikube kubectl -- top pods -n oficina
+minikube kubectl -- get hpa -n oficina
+minikube kubectl -- get pods -n oficina
+```
+
+O aumento pode levar alguns minutos. A política permite apenas um novo pod por minuto e nunca ultrapassa cinco réplicas.
+
+### Critério de sucesso
+
+Registre como evidência:
+
+- métricas numéricas, sem `<unknown>`;
+- `ScalingActive=True`;
+- aumento de `REPLICAS` acima de 2;
+- novos pods da aplicação em `Running`;
+- aplicação ainda respondendo `UP` durante a escala.
+
+### Encerrar a carga
+
+```powershell
+1..10 | ForEach-Object {
+  minikube kubectl -- delete pod "load-generator-$_" `
+    -n oficina `
+    --ignore-not-found
+}
+```
+
+O retorno a duas réplicas leva pelo menos cinco minutos por causa da janela de estabilização:
+
+```powershell
+Start-Sleep -Seconds 330
+minikube kubectl -- get hpa -n oficina
+minikube kubectl -- get pods -n oficina
+```
+
+### Encerrar o ambiente local
+
+Preservar o cluster, removendo apenas a aplicação:
+
+```powershell
+minikube kubectl -- delete namespace oficina
+minikube stop
+```
+
+Remover completamente o cluster:
+
+```powershell
+minikube delete -p minikube
+```
+
+Antes de voltar a executar Maven ou Docker Compose na mesma janela, restaure o Docker Desktop:
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_TLS_VERIFY -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CERT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MINIKUBE_ACTIVE_DOCKERD -ErrorAction SilentlyContinue
+
+docker context use desktop-linux
 ```
 
 ---
 
-## Testes e Cobertura
+## 13. Publicar a feature e validar o CI
 
-### Executar todos os testes
+### Configurar GitHub Actions
 
-```bash
-./mvnw clean verify
+No repositório GitHub:
+
+1. abra **Settings → Actions → General**;
+2. em **Actions permissions**, permita as actions e workflows reutilizáveis usados pelo projeto;
+3. em **Workflow permissions**, selecione **Read and write permissions**;
+4. salve.
+
+Os workflows precisam existir em `.github/workflows/`:
+
+```powershell
+Get-ChildItem .\.github\workflows
 ```
 
-**106 testes** no total:
-- **97 testes unitários** do domínio (sem Spring context)
-- **5 testes ArchUnit** (validação de regras arquiteturais — 4 anéis)
-- **4 testes de integração E2E** (Testcontainers + RestAssured com PostgreSQL 16)
+Esperado:
 
-### Cobertura (JaCoCo)
+```text
+ci.yml
+cd.yml
+deploy.yml
+infra.yml
+```
 
-O build exige **≥ 80% de cobertura** (line + branch) no pacote `br.com.oficina.domain.model`. O build **falha** se a cobertura cair abaixo desse limiar.
+Não é necessário criar um “Simple workflow” pela interface. O GitHub reconhece os YAMLs automaticamente quando eles são enviados.
 
-Relatório HTML: `target/site/jacoco/index.html`
+### Conferir as correções antes do primeiro push
 
-### Classes de domínio cobertas
+```powershell
+Select-String .\pom.xml -Pattern '<testcontainers.version>'
+Select-String .\k8s\app-deployment.yaml -Pattern 'memory:'
+Select-String .\.github\workflows\deploy.yml -Pattern "version: 'v1."
 
-| Classe | Tipo | Classe de Teste |
-|---|---|---|
-| `Dinheiro` | Value Object | `DinheiroTest` |
-| `Documento` | Value Object (CPF/CNPJ) | `DocumentoTest` |
-| `Placa` | Value Object | `PlacaTest` |
-| `NumeroOS` | Value Object | `NumeroOSTest` |
-| `Cliente` | Entidade | `ClienteTest` |
-| `Veiculo` | Entidade | `VeiculoTest` |
-| `Servico` | Entidade | `ServicoTest` |
-| `Peca` | Entidade | `PecaTest` |
-| `EstoquePeca` | Entidade | `EstoquePecaTest` |
-| `MovimentacaoEstoque` | Entidade | `MovimentacaoEstoqueTest` |
-| `LancamentoFinanceiro` | Entidade | `LancamentoFinanceiroTest` |
-| `NotaFiscalFornecedor` | Agregado | `NotaFiscalFornecedorTest` |
-| `ItemOrcamento` | Entidade | `ItemOrcamentoTest` |
-| `Orcamento` | Agregado | `OrcamentoTest` |
-| `OrdemServico` | Agregado raiz | `OrdemServicoTest` |
+git diff -- `
+  pom.xml `
+  k8s/app-deployment.yaml `
+  .github/workflows/deploy.yml
+```
 
----
+Valores esperados:
 
-## Validação de Arquitetura (ArchUnit)
+- Testcontainers 1.21.4 ou superior;
+- `requests.memory` igual a `512Mi`;
+- `limits.memory` igual a `768Mi`;
+- `kubectl` do workflow alinhado ao Kubernetes 1.31 (`v1.31.0`).
 
-5 testes automatizados garantem a integridade da Clean Architecture (4 anéis):
+Não publique uma alteração se `git status` listar `.env`, credenciais, `terraform.tfstate`, planos Terraform ou arquivos com segredos.
 
-1. **4 camadas respeitam dependências** — `infrastructure` → `adapter` → `usecase` → `domain` (nunca o contrário)
-2. **Domínio puro (sem Spring)** — `domain` não pode depender de Spring, JPA ou Servlet
-3. **Domínio puro (sem JPA)** — `domain` não importa `jakarta.persistence` nem `org.hibernate`
-4. **Usecase isolado** — `usecase` não pode depender de `adapter` nem `infrastructure`
-5. **Adapter isolado** — `adapter` não pode depender de `infrastructure`
+### Publicar a branch de trabalho
 
-Localização: `src/test/java/br/com/oficina/architecture/ArchitectureTest.java`
+```powershell
+git status
+git branch --show-current
+git push -u origin feature/validacao-entrega
+```
 
----
+Se o projeto estiver em outra branch, substitua o nome no comando. Para acionar staging, ela deve seguir `feature/**`.
 
-## Vídeo Demonstrativo
+### Abrir Pull Request
 
-Vídeo (até 15 min) demonstrando deploy da aplicação, execução do CI/CD, consumo das APIs e escalabilidade automática (HPA):
+No GitHub:
 
-- **Link**: _a publicar (YouTube/Vimeo)_
+1. abra **Pull requests → New pull request**;
+2. base: `main`;
+3. compare: `feature/validacao-entrega`;
+4. crie o PR;
+5. aguarde os checks.
 
----
+### Checks esperados do CI
 
-## CI/CD (GitHub Actions)
+- **Build, test & coverage**;
+- **SBOM (CycloneDX) + Dependency-Track**;
+- **Trivy scan**.
 
-Dois workflows complementares automatizam build, testes e deploy:
+O runner Linux do CI executa o Maven Wrapper com a meta `verify` e deve apresentar 120 testes aprovados.
 
-**CI (`ci.yml`)** — a cada push/PR:
-1. **Build, Test & Coverage** — `./mvnw -B verify` (compilação + testes + JaCoCo)
-2. **SBOM** — gera relatório CycloneDX de dependências
-3. **Trivy Scan** — análise de vulnerabilidades (HIGH/CRITICAL)
+O upload para Dependency-Track é opcional. Sem `DEPENDENCY_TRACK_URL` e `DEPENDENCY_TRACK_API_KEY`, o SBOM ainda é gerado e anexado como artifact.
 
-**CD (`cd.yml`)** — no push à `main` (ou disparo manual):
-1. **Docker build & push** — constrói a imagem e publica no GHCR
-2. **Deploy no Kubernetes** — `kubectl apply -f k8s/` (banco + app + manifestos) e aguarda o rollout (requer o secret `KUBECONFIG`)
-
-> Detalhes, diagrama e guia de validação do CD em [`README-BLOCO-G-CICD.md`](docs-fase2/README-BLOCO-G-CICD.md).
+O SARIF do Trivy pode depender da disponibilidade do GitHub Code Scanning. O workflow também salva `trivy-fs.sarif` como artifact de fallback.
 
 ---
 
-## Banco de Dados
+## 14. Validar o CD e a imagem no GHCR
 
-- **PostgreSQL 16** com **Flyway** para migrações versionadas
-- Hibernate em modo `validate` (Flyway é o dono do schema)
-- 2 migrações: `V1__schema_inicial.sql` (schema completo) + `V2__ordens_servico_inicio_fim_execucao.sql` (timestamps de execução)
+O workflow `cd.yml` responde a:
 
----
-
-## Documentação Adicional
-
-Toda a documentação do projeto está organizada em [`/docs`](docs-fase1/README-DOCS.md), incluindo:
-
-| Tema | Local |
+| Origem | Ambiente |
 |---|---|
-| DDD (Storytelling, Event Storming, Linguagem Ubíqua) | `docs/` |
-| Decisões arquiteturais (ADR) | `docs/` |
-| Segurança (Dependency-Track, Trivy) | `docs/04-security/` |
-| Apresentação Tech Challenge | `README-apresentacao-tech-challenge-fase1.md` |
+| `feature/**` | staging |
+| `release/**` | pré-produção |
+| `main` ou tag `v*` | produção com aprovação manual |
+
+### O que o CD sempre valida
+
+1. checkout do código;
+2. build da imagem Docker;
+3. autenticação no GHCR com `GITHUB_TOKEN`;
+4. publicação com tag do commit e da branch;
+5. tag `latest` quando a origem é `main`.
+
+Não é necessário cadastrar uma senha do GHCR. O `GITHUB_TOKEN` é fornecido pelo GitHub Actions.
+
+### Conferir o package
+
+Depois do workflow:
+
+1. abra o perfil/organização no GitHub;
+2. abra **Packages**;
+3. localize `fiap-tech-challenge-oficina-mecanica-fase2`;
+4. confirme a tag criada;
+5. para o EKS baixar sem `imagePullSecret`, configure a visibilidade do package como pública.
+
+Imagem esperada:
+
+```text
+ghcr.io/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2:latest
+```
+
+### Deploy automático sem cluster
+
+Se o secret `KUBECONFIG` não estiver configurado no ambiente GitHub, o workflow reutilizável avisa e pula o deploy. Isso permite validar build e publicação antes de criar o EKS.
+
+Antes de habilitar o deploy Kubernetes automático, confirme que `.github/workflows/deploy.yml`:
+
+- instala `kubectl v1.31.0`;
+- não aplica PostgreSQL e aplicação simultaneamente;
+- aguarda o banco ficar pronto antes de aplicar a aplicação;
+- usa RDS, e não PostgreSQL dentro do EKS, no fluxo AWS Academy;
+- recebe os Secrets pelos GitHub Environments, sem versioná-los.
+
+Enquanto essas condições não estiverem atendidas, use o CD apenas para build/push no GHCR e deixe `KUBECONFIG` ausente. No AWS Academy, as credenciais são temporárias; o caminho reproduzível e validado para implantar no EKS é o script `k8s/deploy-aws-academy.ps1`, apresentado após o Terraform. Não aprove produção antes de EKS e RDS existirem.
+
+---
+
+## 15. Provisionar a AWS com Terraform Cloud
+
+### Objetivo
+
+O Terraform cria a VPC, rede, EKS, node group e RDS. O state fica no HCP Terraform. O AWS Academy fornece credenciais temporárias, que devem ser atualizadas a cada nova sessão.
+
+> **ATENÇÃO — Leia antes de começar o Tópico 15.**
+> Se você já executou este tópico antes (mesmo parcialmente), pode haver
+> recursos antigos consumindo créditos ou state inconsistente. **Sempre execute
+> a "Limpeza obrigatória" abaixo antes de recomeçar** do Tópico 15 em diante.
+
+### Limpeza obrigatória antes de recomeçar
+
+Faça esta limpeza sempre que for reiniciar o Tópico 15, para evitar Load Balancers
+órfãos, cluster/RDS antigos, state travado ou pods em `CrashLoopBackOff`.
+
+Requisito: o Lab do AWS Academy precisa estar **verde** e as credenciais carregadas
+nesta sessão (veja "Iniciar e validar o AWS Academy" logo abaixo). Se ainda não
+carregou as credenciais, faça isso primeiro e depois volte aqui.
+
+1. **Remover a aplicação e o Load Balancer** (se o cluster ainda existir):
+
+```powershell
+aws eks update-kubeconfig --region us-west-2 --name oficina-dev 2>$null
+
+kubectl delete namespace oficina `
+  --ignore-not-found=true `
+  --wait=true `
+  --timeout=600s
+```
+
+Se `update-kubeconfig` falhar porque o cluster não existe mais, ignore e siga.
+
+2. **Confirmar que nenhum Load Balancer ficou órfão:**
+
+```powershell
+aws elbv2 describe-load-balancers `
+  --region us-west-2 `
+  --query 'LoadBalancers[].LoadBalancerName' `
+  --output text
+
+aws elb describe-load-balancers `
+  --region us-west-2 `
+  --query 'LoadBalancerDescriptions[].LoadBalancerName' `
+  --output text
+```
+
+Ambos devem retornar vazio. Se sobrar algum LB criado pelo Service, remova o
+namespace novamente antes de destruir a infraestrutura.
+
+3. **Destruir a infraestrutura no HCP Terraform** (se um Apply anterior já criou
+   recursos):
+
+  - atualize `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` e `AWS_SESSION_TOKEN`
+    no workspace (Environment Variables, Sensitive);
+  - descarte runs pendentes;
+  - **Settings → Destruction and Deletion → Queue destroy plan**;
+  - revise (só destruições) e confirme;
+  - aguarde `Destroy complete`.
+
+4. **Validar que EKS e RDS não existem mais:**
+
+```powershell
+aws eks describe-cluster --region us-west-2 --name oficina-dev
+aws rds describe-db-instances --region us-west-2 --db-instance-identifier oficina-dev-db
+```
+
+Esperado: `ResourceNotFoundException` e `DBInstanceNotFound`.
+
+Só depois desta limpeza recomece o Plan/Apply do Tópico 15. Se você nunca chegou a
+fazer Apply antes, pule direto para "Iniciar e validar o AWS Academy".
+
+### Iniciar e validar o AWS Academy
+
+1. clique em **Start Lab**;
+2. aguarde o indicador verde;
+3. abra **AWS Details → AWS CLI → Show**;
+4. copie o bloco completo sem colá-lo no chat, GitHub ou documentação.
+
+O helper `set-aws-creds.ps1` lê as três chaves **da área de transferência (clipboard)**,
+não de argumentos. Portanto a ordem correta é: primeiro digitar o comando, depois
+copiar o bloco, e só então pressionar Enter.
+
+> **NUNCA cole o bloco de credenciais diretamente no PowerShell.** Se você colar,
+> o PowerShell tentará executar `aws_access_key_id=...` como comando e concatenará
+> o valor à região (ex.: `us-west-2aws_access_key_id=...`). O clipboard é lido pelo
+> script; você não precisa colar nada.
+
+Procedimento exato:
+
+1. na raiz do projeto, **digite** o comando abaixo, mas **não pressione Enter ainda**:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+& .\k8s\set-aws-creds.ps1 -Region us-west-2
+```
+
+2. vá ao AWS Academy, **AWS Details → AWS CLI → Show**;
+3. copie o bloco completo (com `aws_access_key_id`, `aws_secret_access_key` e
+   `aws_session_token`);
+4. **não cole em lugar nenhum**;
+5. volte ao PowerShell, onde o comando já está digitado, e pressione Enter.
+
+Se você abriu uma janela nova, reative o comando com a seta `↑` (assim o clipboard
+não é substituído) e pressione Enter.
+
+Force a região correta e valide sem mostrar segredos:
+
+```powershell
+$env:AWS_REGION = 'us-west-2'
+$env:AWS_DEFAULT_REGION = 'us-west-2'
+
+$env:AWS_DEFAULT_REGION
+Test-Path Env:AWS_ACCESS_KEY_ID
+Test-Path Env:AWS_SECRET_ACCESS_KEY
+Test-Path Env:AWS_SESSION_TOKEN
+aws sts get-caller-identity --region us-west-2
+```
+
+Esperado: região exatamente `us-west-2`, três `True` e a identidade da conta/role.
+Se aparecer `us-west-2[default]` ou `us-west-2aws_access_key_id=...`, a região está
+malformada — refaça os dois `$env:` acima antes de continuar.
+
+Não use `aws configure` como procedimento principal do Academy.
+
+### Criar ou escolher o workspace
+
+Para um repositório final novo e sem state anterior:
+
+1. HCP Terraform → **New Workspace**;
+2. escolha **Version Control Workflow**;
+3. conecte o GitHub;
+4. selecione `tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2`;
+5. nome sugerido: `oficina-backend-infra`;
+6. **Terraform Working Directory:** `infra`;
+7. **Apply Method:** Manual apply.
+
+Se outro workspace já administra a mesma VPC/EKS/RDS, não crie um segundo state. Reconecte o workspace existente ao novo repositório.
+
+### Configurar credenciais AWS no workspace
+
+Em **Workspace → Variables**, crie como **Environment Variables** e marque como **Sensitive**:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+```
+
+Atualize os três valores sempre que reiniciar o Lab.
+
+### Obter o ARN da LabRole
+
+```powershell
+aws iam get-role `
+  --role-name LabRole `
+  --query 'Role.Arn' `
+  --output text
+```
+
+### Configurar Terraform Variables
+
+| Variável | Valor |
+|---|---|
+| `aws_region` | `us-west-2` |
+| `environment` | `dev` |
+| `availability_zones` | `["us-west-2a", "us-west-2b"]` com HCL habilitado |
+| `cluster_version` | `1.31` |
+| `node_instance_type` | `t3.medium` |
+| `node_desired_count` | `2` |
+| `node_min_count` | `1` |
+| `node_max_count` | `3` |
+| `lab_role_arn` | ARN retornado pelo comando anterior |
+| `access_entry_role_arn` | string vazia |
+| `create_state_backend` | `false` |
+| `db_instance_class` | `db.t3.micro` |
+| `db_name` | `oficina` |
+| `db_username` | `oficina` |
+| `db_password` | senha forte, marcada Sensitive |
+| `db_engine_version` | `16` |
+
+A senha usada em `db_password` será necessária no deploy da aplicação.
+
+### Conferir backend
+
+O projeto está configurado para Terraform Cloud:
+
+```hcl
+terraform {
+  cloud {}
+}
+```
+
+Não misture state local, backend S3 e Terraform Cloud.
+
+### Executar Plan e Apply
+
+Forma recomendada:
+
+1. abra o workspace;
+2. confira as variáveis;
+3. inicie um novo run;
+4. revise o plan;
+5. confirme o apply;
+6. aguarde aproximadamente 15–20 minutos.
+
+O plan não deve criar IAM Roles; o projeto reutiliza a `LabRole`.
+
+### Workflow opcional de infraestrutura
+
+Para usar `.github/workflows/infra.yml`:
+
+1. substitua `SUA_ORGANIZACAO_AQUI` pelo nome real da organização HCP Terraform;
+2. confira `TF_WORKSPACE`;
+3. crie no GitHub o secret `TF_API_TOKEN`;
+4. execute **Actions → Infra (Terraform Cloud) → Run workflow**.
+
+As credenciais AWS continuam no workspace do Terraform Cloud, não no repositório.
+
+### Validar recursos
+
+```powershell
+aws eks describe-cluster `
+  --region us-west-2 `
+  --name oficina-dev `
+  --query 'cluster.status' `
+  --output text
+
+aws rds describe-db-instances `
+  --region us-west-2 `
+  --db-instance-identifier oficina-dev-db `
+  --query 'DBInstances[0].DBInstanceStatus' `
+  --output text
+```
+
+Esperado:
+
+```text
+ACTIVE
+available
+```
+
+---
+
+## 16. Implantar e validar a aplicação no EKS
+
+### Atualizar kubeconfig
+
+As credenciais locais do AWS Academy ainda precisam estar válidas.
+
+```powershell
+aws eks update-kubeconfig `
+  --region us-west-2 `
+  --name oficina-dev
+
+kubectl get nodes
+```
+
+Esperado: dois nodes `Ready`.
+
+### Confirmar imagem pública no GHCR
+
+A implantação usa por padrão:
+
+```text
+ghcr.io/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2:latest
+```
+
+Se o package for privado, o EKS ficará em `ImagePullBackOff`. Para esta entrega, deixe a imagem pública ou configure um `imagePullSecret`.
+
+### Informar senhas sem gravá-las no histórico
+
+```powershell
+$SecureDbPassword = Read-Host "Senha do RDS" -AsSecureString
+$DbPassword = [System.Net.NetworkCredential]::new("", $SecureDbPassword).Password
+
+$SecureAdminPassword = Read-Host "Senha do administrador da aplicacao" -AsSecureString
+$AdminPassword = [System.Net.NetworkCredential]::new("", $SecureAdminPassword).Password
+$env:ADMIN_PASSWORD = $AdminPassword
+```
+
+A senha do RDS deve ser exatamente a mesma variável `db_password` usada no Terraform Cloud.
+
+### Executar o deploy validado para AWS Academy
+
+```powershell
+& .\k8s\deploy-aws-academy.ps1 `
+  -DbPassword $DbPassword `
+  -Region us-west-2 `
+  -Image "ghcr.io/tiagomiele/fiap-tech-challenge-oficina-mecanica-fase2:latest"
+```
+
+O script:
+
+1. descobre o endpoint do RDS;
+2. cria namespace;
+3. cria ConfigMap apontando para o RDS;
+4. cria Secret sem versionar senhas;
+5. aplica Deployment, Service e HPA;
+6. não cria PostgreSQL dentro do EKS.
+
+### Acompanhar rollout
+
+```powershell
+kubectl rollout status deployment/oficina-app `
+  -n oficina `
+  --timeout=300s
+
+kubectl get pods,svc,hpa -n oficina
+```
+
+Só avance quando os **dois pods** estiverem `1/1 Running`. Um pod em `Running 0/1`
+ainda não está pronto (readiness falhando). Não teste health/Swagger antes disso.
+
+### Diagnóstico se os pods não ficarem prontos
+
+Se aparecer `CrashLoopBackOff` ou `Running 0/1`, o problema quase sempre é conexão
+com o RDS (senha, endpoint ou security group). Diagnostique um passo por vez.
+
+1. Ver eventos e motivo do último encerramento (não altera nada):
+
+```powershell
+kubectl describe pods -n oficina -l app.kubernetes.io/name=oficina-app
+```
+
+2. Ver o log da tentativa anterior:
+
+```powershell
+$Pod = kubectl get pods -n oficina `
+  -l app.kubernetes.io/name=oficina-app `
+  -o jsonpath='{.items[0].metadata.name}'
+
+kubectl logs $Pod -n oficina --previous --tail=100
+```
+
+3. Se o comando de log falhar com `tls: internal error` (ou `Unauthorized`), o
+   problema não é a aplicação: é o Security Group entre o control plane do EKS e os
+   nodes, comum no AWS Academy quando o cluster foi recriado. Nesse caso:
+
+  - confirme que os nodes estão saudáveis: `kubectl get nodes -o wide`;
+  - se os nodes estiverem `Ready` mas os logs continuarem com `tls: internal error`
+    em **todos** os pods, a infraestrutura ficou inconsistente. **Destrua e recrie**
+    seguindo a "Limpeza obrigatória" do Tópico 15 — não tente corrigir por manifest.
+
+4. Confirmar que a senha do deploy é idêntica à `db_password` do Terraform:
+
+```powershell
+aws rds describe-db-instances `
+  --region us-west-2 `
+  --db-instance-identifier oficina-dev-db `
+  --query 'DBInstances[0].Endpoint.Address' `
+  --output text
+```
+
+Se a senha divergir, reexecute o deploy com a senha correta.
+
+### Obter URL pública
+
+```powershell
+kubectl get svc oficina-app -n oficina
+
+$ExternalHost = kubectl get svc oficina-app `
+  -n oficina `
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+$BaseUrl = "http://$ExternalHost"
+$BaseUrl
+```
+
+O LoadBalancer pode levar de dois a quatro minutos para receber hostname.
+
+### Validar health e Swagger
+
+```powershell
+Invoke-RestMethod "$BaseUrl/actuator/health"
+Start-Process "$BaseUrl/swagger-ui/index.html"
+```
+
+Para repetir o fluxo completo da OS na AWS, volte à seção [Validar o fluxo funcional da API](#10-validar-o-fluxo-funcional-da-api), mantenha a mesma janela PowerShell e use:
+
+```powershell
+$BaseUrl = "http://$ExternalHost"
+```
+
+### Notificação por SMTP opcional
+
+Para usar Mailtrap, leia as credenciais em memória:
+
+```powershell
+$MailUser = Read-Host "Usuario do Mailtrap"
+$SecureMailPassword = Read-Host "Senha do Mailtrap" -AsSecureString
+$MailPassword = [System.Net.NetworkCredential]::new("", $SecureMailPassword).Password
+
+& .\k8s\deploy-aws-academy.ps1 `
+  -DbPassword $DbPassword `
+  -Region us-west-2 `
+  -MailHost "sandbox.smtp.mailtrap.io" `
+  -MailPort "587" `
+  -MailUser $MailUser `
+  -MailPassword $MailPassword
+```
+
+Sem `MailHost`, a aplicação usa notificação por log.
+
+### Limpar variáveis sensíveis da sessão
+
+```powershell
+Remove-Variable DbPassword -ErrorAction SilentlyContinue
+Remove-Variable AdminPassword -ErrorAction SilentlyContinue
+Remove-Variable MailPassword -ErrorAction SilentlyContinue
+Remove-Item Env:ADMIN_PASSWORD -ErrorAction SilentlyContinue
+```
+
+---
+
+## 17. Validar o HPA no EKS
+
+O EKS não instala o metrics-server automaticamente. Esse teste consome recursos do laboratório; execute apenas durante a coleta de evidências.
+
+### Instalar metrics-server
+
+```powershell
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+
+kubectl rollout status deployment/metrics-server `
+  -n kube-system `
+  --timeout=180s
+```
+
+> **Se o rollout falhar** com `0 of 1 updated replicas are available` e depois
+> `kubectl top nodes` retornar `Metrics API not available`, e o `kubectl logs`
+> mostrar `tls: internal error`: o metrics-server não consegue falar com os
+> kubelets. Isso indica o mesmo Security Group inconsistente entre control plane e
+> nodes descrito no Tópico 16. Não adicione `--kubelet-insecure-tls` às cegas.
+> Primeiro colete o diagnóstico:
+>
+> ```powershell
+> kubectl get pods -n kube-system -l k8s-app=metrics-server -o wide
+> kubectl describe apiservice v1beta1.metrics.k8s.io
+> ```
+>
+> Se o cluster estiver inconsistente, destrua e recrie pela "Limpeza obrigatória"
+> do Tópico 15 antes de repetir o HPA.
+
+### Conferir métricas e linha de base
+
+```powershell
+Start-Sleep -Seconds 45
+kubectl top nodes
+kubectl top pods -n oficina
+kubectl get hpa oficina-app-hpa -n oficina
+kubectl describe hpa oficina-app-hpa -n oficina
+```
+
+Antes da carga, confirme métricas numéricas, `ScalingActive=True`, CPU/memória abaixo dos alvos e duas réplicas. O Deployment implantado no EKS deve manter os recursos calibrados em 512 Mi de request e 768 Mi de limit.
+
+### Acompanhar em janelas separadas
+
+```powershell
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'kubectl get hpa -n oficina -w'
+
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'kubectl get pods -n oficina -w'
+```
+
+### Gerar carga
+
+```powershell
+1..10 | ForEach-Object {
+  kubectl run "load-generator-$_" `
+    -n oficina `
+    --image=busybox:1.36 `
+    --restart=Never `
+    -- /bin/sh -c "while true; do wget -q -O- http://oficina-app/actuator/health > /dev/null; done"
+}
+```
+
+Acompanhe sem usar watch de múltiplos recursos:
+
+```powershell
+kubectl top pods -n oficina
+kubectl get hpa -n oficina
+kubectl get pods -n oficina
+```
+
+### Encerrar
+
+```powershell
+1..10 | ForEach-Object {
+  kubectl delete pod "load-generator-$_" `
+    -n oficina `
+    --ignore-not-found
+}
+```
+
+Aguarde a janela de scale-down antes de registrar o retorno a duas réplicas.
+
+---
+
+## 18. Encerrar os recursos da AWS
+
+Essa etapa é obrigatória para não consumir créditos.
+
+### Remover primeiro o LoadBalancer
+
+```powershell
+kubectl delete service oficina-app -n oficina
+kubectl get svc -n oficina
+```
+
+Aguarde o Service desaparecer.
+
+### Destruir pelo Terraform Cloud
+
+1. abra o workspace;
+2. vá a **Settings → Destruction and Deletion**;
+3. selecione **Queue destroy plan**;
+4. revise o plano;
+5. confirme digitando `delete` quando solicitado;
+6. aguarde `Apply complete`.
+
+### Validar remoção
+
+```powershell
+aws eks describe-cluster `
+  --region us-west-2 `
+  --name oficina-dev
+
+aws rds describe-db-instances `
+  --region us-west-2 `
+  --db-instance-identifier oficina-dev-db
+```
+
+Depois da destruição, os comandos devem informar que os recursos não existem.
+
+Por fim:
+
+1. remova/expire variáveis temporárias se necessário;
+2. clique em **End Lab** no AWS Academy.
+
+---
+
+## 19. Endpoints principais
+
+| Área | Rota | Método | Autorização |
+|---|---|---|---|
+| Login | `/auth/login` | POST | Pública |
+| Usuários | `/usuarios` | POST | Admin |
+| Clientes | `/clientes` | POST/GET/PUT | Admin |
+| Veículos | `/veiculos` | POST/GET/PUT | Admin |
+| Serviços | `/servicos` | POST/GET/PUT | Admin |
+| Peças | `/pecas` | POST/GET/PUT | Admin |
+| Estoque | `/estoque` | GET | Admin |
+| NF fornecedor | `/notas-fiscais-fornecedor` | POST/GET | Admin |
+| Abrir OS | `/ordens-servico` | POST | Admin |
+| Abrir OS Recebida | `/ordens-servico/recebida` | POST | Admin |
+| Alterar status | `/ordens-servico/{numeroOs}/status` | PATCH | Admin |
+| Relatório por status | `/relatorios/os-por-status` | GET | Admin |
+| Tempo médio | `/relatorios/tempo-medio-por-os` | GET | Admin |
+| Adicionar serviço | `/ordens-servico/{numeroOs}/servicos` | POST | Técnico |
+| Adicionar peça | `/ordens-servico/{numeroOs}/pecas` | POST | Técnico |
+| Enviar para aprovação | `/ordens-servico/{numeroOs}/enviar-para-aprovacao` | POST | Técnico |
+| Cancelar diagnóstico | `/ordens-servico/{numeroOs}/cancelar-diagnostico` | POST | Técnico |
+| Concluir reparo | `/ordens-servico/{numeroOs}/concluir-reparo` | POST | Técnico |
+| Entregar | `/ordens-servico/{numeroOs}/entregar` | POST | Técnico |
+| Aprovar | `/ordens-servico/{numeroOs}/aprovar` | POST | Pública |
+| Rejeitar/refazer | `/ordens-servico/{numeroOs}/rejeitar-refazer` | POST | Pública |
+| Rejeitar/cancelar | `/ordens-servico/{numeroOs}/rejeitar-cancelar` | POST | Pública |
+| Confirmar pagamento | `/ordens-servico/{numeroOs}/confirmar-pagamento` | POST | Pública |
+| Status público | `/consulta/ordens-servico/{numeroOs}/status` | GET | Pública |
+
+Swagger:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+OpenAPI JSON:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
+Exportar a especificação:
+
+```powershell
+Invoke-WebRequest `
+  -Uri http://localhost:8080/v3/api-docs `
+  -OutFile .\oficina-openapi.json
+```
+
+---
+
+## 20. Variáveis de ambiente
+
+| Variável | Uso |
+|---|---|
+| `DB_URL` | URL JDBC do PostgreSQL |
+| `DB_USER` | Usuário do banco |
+| `DB_PASSWORD` | Senha do banco |
+| `JWT_SECRET` | Chave de assinatura JWT |
+| `ADMIN_EMAIL` | E-mail do admin inicial |
+| `ADMIN_PASSWORD` | Senha do admin inicial |
+| `SERVER_PORT` | Porta HTTP |
+| `SPRING_PROFILES_ACTIVE` | Perfil Spring |
+| `NOTIFICACAO_TIPO` | `log` ou `smtp` |
+| `NOTIFICACAO_REMETENTE` | Remetente das notificações |
+| `MAIL_HOST` | Host SMTP |
+| `MAIL_PORT` | Porta SMTP |
+| `MAIL_USERNAME` | Usuário SMTP |
+| `MAIL_PASSWORD` | Senha SMTP |
+
+Use `.env.example` apenas como modelo. Não versione `.env` com valores reais.
+
+---
+
+## 21. Troubleshooting
+
+### Maven/Testcontainers não encontra o Docker
+
+Sintomas:
+
+```text
+Could not find a valid Docker environment
+Failed to initialize pool
+```
+
+Restaure o Docker Desktop e confirme Client e Server:
+
+```powershell
+Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_TLS_VERIFY -ErrorAction SilentlyContinue
+Remove-Item Env:DOCKER_CERT_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MINIKUBE_ACTIVE_DOCKERD -ErrorAction SilentlyContinue
+
+docker context use desktop-linux
+docker version
+```
+
+Se o Docker Engine for 29 e o Testcontainers estiver em 1.20.2, atualize o projeto para 1.21.4 ou superior. Não desative os testes de integração e não substitua PostgreSQL por H2.
+
+### API local não responde na porta 8080
+
+Sintoma:
+
+```text
+Invoke-RestMethod : Impossível conectar-se ao servidor remoto
+```
+
+O serviço não está escutando. Confirme o Compose antes de diagnosticar login ou JWT:
+
+```powershell
+docker compose ps
+docker compose logs --tail=150 app
+docker compose logs --tail=100 db
+Test-NetConnection localhost -Port 8080
+```
+
+Se os containers ainda não foram iniciados:
+
+```powershell
+docker compose up --build -d
+```
+
+### Minikube não inicia
+
+Sintoma:
+
+```text
+K8S_APISERVER_MISSING
+```
+
+Recrie o perfil com a versão fixada:
+
+```powershell
+minikube delete -p minikube
+minikube start `
+  --driver=docker `
+  --cpus=2 `
+  --memory=4096 `
+  --kubernetes-version=v1.31.0
+
+minikube status
+minikube kubectl -- get nodes
+```
+
+Não prossiga enquanto `apiserver` não estiver `Running` e o node não estiver `Ready`.
+
+### Build da imagem falha ao acessar o Maven Central
+
+Sintoma:
+
+```text
+wget: bad address 'repo.maven.apache.org'
+```
+
+Confirme o cluster, o daemon e o DNS:
+
+```powershell
+minikube status
+$env:MINIKUBE_ACTIVE_DOCKERD
+docker info --format '{{.Name}}'
+minikube ssh -- "nslookup repo.maven.apache.org"
+```
+
+O nome do daemon deve ser `minikube`. Só repita o build quando o DNS resolver corretamente.
+
+### Imagem não encontrada no Minikube
+
+```powershell
+& minikube -p minikube docker-env --shell powershell |
+  Invoke-Expression
+
+$env:MINIKUBE_ACTIVE_DOCKERD
+docker info --format '{{.Name}}'
+docker build --no-cache -t oficina-backend:latest .
+minikube image ls | Select-String "oficina-backend"
+```
+
+Uma imagem antiga listada não comprova que o build atual passou. O build precisa terminar em `FINISHED`.
+
+### Aplicação em CrashLoopBackOff
+
+```powershell
+minikube kubectl -- get pods -n oficina
+minikube kubectl -- logs `
+  -n oficina `
+  -l app.kubernetes.io/name=oficina-app `
+  --all-containers=true `
+  --prefix `
+  --tail=100
+```
+
+Se o PostgreSQL ainda não estava pronto:
+
+```powershell
+minikube kubectl -- rollout status deployment/oficina-db `
+  -n oficina `
+  --timeout=180s
+
+minikube kubectl -- rollout restart deployment/oficina-app -n oficina
+
+minikube kubectl -- rollout status deployment/oficina-app `
+  -n oficina `
+  --timeout=300s
+```
+
+Na próxima execução, mantenha a ordem banco pronto → aplicação.
+
+### HPA mostra `<unknown>`
+
+```powershell
+minikube addons enable metrics-server
+
+minikube kubectl -- rollout status deployment/metrics-server `
+  -n kube-system `
+  --timeout=180s
+
+Start-Sleep -Seconds 45
+minikube kubectl -- top pods -n oficina
+minikube kubectl -- get hpa -n oficina
+```
+
+`<unknown>` é temporário durante a inicialização. Se continuar, confira a API de métricas e os logs do `metrics-server`. No EKS, instale o componente conforme a seção específica.
+
+### HPA escala sem carga externa
+
+Se aparecer algo como `memory: 105%/80%`, a métrica está funcionando, mas o request de memória está abaixo do consumo normal da JVM. Confirme:
+
+```powershell
+minikube kubectl -- top pods -n oficina
+minikube kubectl -- get deployment oficina-app `
+  -n oficina `
+  -o jsonpath='{.spec.template.spec.containers[0].resources}'
+```
+
+Use `requests.memory=512Mi` e `limits.memory=768Mi`, aplique novamente o Deployment e aguarde a janela de scale-down de 300 segundos antes de gerar carga.
+
+### Watch de HPA e pods retorna erro
+
+Sintoma:
+
+```text
+error: you may only specify a single resource type
+```
+
+Não use `kubectl get hpa,pods -w`. Execute dois watches separados:
+
+```powershell
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'minikube kubectl -- get hpa -n oficina -w'
+
+Start-Process powershell -ArgumentList `
+  '-NoExit', `
+  '-Command', `
+  'minikube kubectl -- get pods -n oficina -w'
+```
+
+### Port-forward parou
+
+```powershell
+minikube kubectl -- port-forward svc/oficina-app 8080:80 -n oficina
+```
+
+Execute novamente após restart/rollout.
+
+### AWS retorna `InvalidClientTokenId`
+
+As credenciais expiraram ou estão incompletas:
+
+1. **End Lab**;
+2. **Start Lab**;
+3. aguarde o indicador verde;
+4. copie o bloco AWS CLI completo;
+5. execute novamente `set-aws-creds.ps1`.
+
+### Script não encontra credenciais no clipboard
+
+Copiar outro comando depois das credenciais substitui o clipboard. Digite primeiro o comando no PowerShell, copie o bloco do Academy e só então pressione Enter.
+
+### EKS em `ImagePullBackOff`
+
+```powershell
+kubectl describe pod -n oficina -l app.kubernetes.io/name=oficina-app
+```
+
+Confirme que o package GHCR existe e está público.
+
+### Aplicação no EKS não conecta ao RDS
+
+Confirme:
+
+- RDS `available`;
+- senha do deploy igual a `db_password`;
+- ConfigMap apontando ao endpoint correto;
+- security groups criados pelo Terraform.
+
+```powershell
+kubectl logs -n oficina -l app.kubernetes.io/name=oficina-app --tail=100
+kubectl get configmap oficina-config -n oficina -o yaml
+```
+
+Não exiba o Secret.
+
+### Terraform Cloud não autentica na AWS
+
+Atualize no workspace as três Environment Variables Sensitive da sessão atual:
+
+```text
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_SESSION_TOKEN
+```
+
+### GitHub Actions não mostra workflows
+
+Confira se os arquivos estão na branch padrão:
+
+```powershell
+Get-ChildItem .\.github\workflows
+git branch --show-current
+git status
+git push
+```
+
+---
+
+## 22. Evidências para a entrega
+
+Registre:
+
+### Código e qualidade
+
+- arquitetura e diagramas;
+- `BUILD SUCCESS`;
+- `Tests run: 120`;
+- relatório JaCoCo;
+- ArchUnit;
+- artifacts SBOM e Trivy.
+
+### Docker
+
+- `docker compose ps`;
+- health `UP`;
+- Swagger;
+- fluxo funcional da OS.
+
+### Minikube
+
+- node `Ready`;
+- banco e duas réplicas da aplicação `1/1 Running`;
+- probes e rollout;
+- HPA CPU 70% e memória 80%;
+- aumento e retorno das réplicas.
+
+### GitHub
+
+- Pull Request;
+- checks do CI;
+- execução do CD;
+- imagem publicada no GHCR;
+- aprovação manual de produção.
+
+### AWS
+
+- run do Terraform Cloud;
+- EKS `ACTIVE`;
+- RDS `available`;
+- nodes `Ready`;
+- pods da aplicação;
+- LoadBalancer;
+- health e Swagger públicos;
+- HPA no EKS;
+- destroy concluído.
+
+## 23. Documentação adicional
+
+| Tema | Documento |
+| Documentações Entrega - Fase 1 | [`docs-fase1/README-DOCS.md`](docs-fase1/README-DOCS.md) |
+| Documentações Entrega - Fase 2 | [`docs-fase2/`](docs-fase2) |
+
+---
